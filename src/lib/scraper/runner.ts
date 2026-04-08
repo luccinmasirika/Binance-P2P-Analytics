@@ -1,0 +1,223 @@
+import { eq, and, sql } from "drizzle-orm";
+import { db } from "../db/client";
+import {
+  scrapeSessions,
+  advertisers,
+  ads,
+  adPaymentMethods,
+  forexRates,
+  marketDepthSnapshots,
+  countries,
+} from "../db/schema";
+import { fetchAllAds } from "./binance";
+import { fetchForexRate } from "./forex";
+import { checkAlerts } from "../alerts/telegram";
+import type { AdItem } from "./types";
+
+export async function runFullScrape() {
+  console.log(`[${new Date().toISOString()}] Starting full scrape...`);
+
+  // Get all active countries
+  const activeCountries = await db
+    .select()
+    .from(countries)
+    .where(eq(countries.isActive, true));
+
+  if (activeCountries.length === 0) {
+    console.log("  No active countries configured. Skipping scrape.");
+    return;
+  }
+
+  // 1. Create session
+  const [session] = await db
+    .insert(scrapeSessions)
+    .values({ status: "running" })
+    .returning();
+
+  try {
+    let totalAds = 0;
+
+    for (const country of activeCountries) {
+      console.log(`  Scraping ${country.name} (${country.fiat})...`);
+      const seenAdvNos = new Set<string>();
+
+      // 2. Scrape Binance P2P for BUY and SELL with all allowed payment methods
+      for (const tradeType of ["BUY", "SELL"] as const) {
+        const countryPayTypes = country.payTypes ?? [];
+        console.log(`    Fetching ${tradeType} ads for ${country.fiat} [${country.countryCode}]...`);
+        const items = await fetchAllAds(country.fiat, tradeType, country.countryCode, countryPayTypes);
+        console.log(`    Found ${items.length} ${tradeType} ads`);
+
+        for (const item of items) {
+          if (seenAdvNos.has(item.adv.advNo)) continue;
+          seenAdvNos.add(item.adv.advNo);
+
+          await insertAd(session.id, country.fiat, item, countryPayTypes);
+          totalAds++;
+        }
+      }
+
+      // 3. Compute market depth snapshots for this country
+      await computeDepthSnapshots(session.id, country.fiat);
+
+      // 4. Fetch forex rate for this country
+      try {
+        const forex = await fetchForexRate(country.fiat);
+        await db.insert(forexRates).values({
+          base: forex.base,
+          target: forex.target,
+          rate: String(forex.rate),
+          source: forex.source,
+        });
+        console.log(`    USD/${country.fiat} rate: ${forex.rate}`);
+      } catch (err) {
+        console.error(`    Failed to fetch forex rate for ${country.fiat}:`, err);
+      }
+    }
+
+    // 5. Check alerts
+    console.log("  Checking alerts...");
+    try {
+      await checkAlerts();
+    } catch (err) {
+      console.error("  Failed to check alerts:", err);
+    }
+
+    // 6. Update session
+    await db
+      .update(scrapeSessions)
+      .set({
+        status: "completed",
+        totalAds,
+        finishedAt: new Date(),
+      })
+      .where(eq(scrapeSessions.id, session.id));
+
+    console.log(`[${new Date().toISOString()}] Scrape completed: ${totalAds} ads`);
+  } catch (err) {
+    await db
+      .update(scrapeSessions)
+      .set({ status: "failed", finishedAt: new Date() })
+      .where(eq(scrapeSessions.id, session.id));
+
+    console.error(`[${new Date().toISOString()}] Scrape failed:`, err);
+    throw err;
+  }
+}
+
+async function insertAd(sessionId: number, fiat: string, item: AdItem, allowedPayTypes: string[]) {
+  const { adv, advertiser: adv_advertiser } = item;
+
+  // Upsert advertiser
+  const [advertiser] = await db
+    .insert(advertisers)
+    .values({
+      userNo: adv_advertiser.userNo,
+      nickname: adv_advertiser.nickName,
+      monthlyOrderCount: adv_advertiser.monthOrderCount,
+      monthlyFinishRate: String(adv_advertiser.monthFinishRate),
+      positiveRate: String(adv_advertiser.positiveRate),
+      userType: adv_advertiser.userType,
+      lastSeenAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: advertisers.userNo,
+      set: {
+        nickname: adv_advertiser.nickName,
+        monthlyOrderCount: adv_advertiser.monthOrderCount,
+        monthlyFinishRate: String(adv_advertiser.monthFinishRate),
+        positiveRate: String(adv_advertiser.positiveRate),
+        userType: adv_advertiser.userType,
+        lastSeenAt: new Date(),
+      },
+    })
+    .returning();
+
+  // Insert ad
+  const [ad] = await db
+    .insert(ads)
+    .values({
+      sessionId,
+      fiat,
+      advNo: adv.advNo,
+      tradeType: adv.tradeType,
+      asset: adv.asset,
+      price: String(adv.price),
+      surplusAmount: String(adv.surplusAmount),
+      minAmount: String(adv.minSingleTransAmount),
+      maxAmount: String(adv.maxSingleTransAmount),
+      tradableQuantity: String(adv.tradableQuantity),
+      payTimeLimit: adv.payTimeLimit,
+      advertiserId: advertiser.id,
+    })
+    .returning();
+
+  // Insert payment methods (only allowed ones for this country)
+  const allowedSet = new Set(allowedPayTypes);
+  const filteredMethods = adv.tradeMethods.filter(
+    (m) => m.identifier && allowedSet.has(m.identifier)
+  );
+  if (filteredMethods.length > 0) {
+    await db.insert(adPaymentMethods).values(
+      filteredMethods.map((m) => ({
+        adId: ad.id,
+        payType: m.identifier,
+        payMethodName: m.tradeMethodName,
+      }))
+    );
+  }
+}
+
+async function computeDepthSnapshots(sessionId: number, fiat: string) {
+  const depthData = await db
+    .select({
+      tradeType: ads.tradeType,
+      price: ads.price,
+      totalQuantity: sql<string>`SUM(CAST(${ads.tradableQuantity} AS numeric))`,
+      adCount: sql<number>`COUNT(*)::int`,
+    })
+    .from(ads)
+    .where(and(eq(ads.sessionId, sessionId), eq(ads.fiat, fiat)))
+    .groupBy(ads.tradeType, ads.price);
+
+  if (depthData.length > 0) {
+    await db.insert(marketDepthSnapshots).values(
+      depthData.map((d) => ({
+        sessionId,
+        fiat,
+        tradeType: d.tradeType,
+        priceLevel: d.price,
+        totalQuantity: d.totalQuantity,
+        adCount: d.adCount,
+        payType: null,
+      }))
+    );
+  }
+
+  const depthByPay = await db
+    .select({
+      tradeType: ads.tradeType,
+      price: ads.price,
+      payType: adPaymentMethods.payType,
+      totalQuantity: sql<string>`SUM(CAST(${ads.tradableQuantity} AS numeric))`,
+      adCount: sql<number>`COUNT(*)::int`,
+    })
+    .from(ads)
+    .innerJoin(adPaymentMethods, eq(ads.id, adPaymentMethods.adId))
+    .where(and(eq(ads.sessionId, sessionId), eq(ads.fiat, fiat)))
+    .groupBy(ads.tradeType, ads.price, adPaymentMethods.payType);
+
+  if (depthByPay.length > 0) {
+    await db.insert(marketDepthSnapshots).values(
+      depthByPay.map((d) => ({
+        sessionId,
+        fiat,
+        tradeType: d.tradeType,
+        priceLevel: d.price,
+        totalQuantity: d.totalQuantity,
+        adCount: d.adCount,
+        payType: d.payType,
+      }))
+    );
+  }
+}

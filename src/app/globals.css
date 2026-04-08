@@ -49,72 +49,47 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Binance-inspired Pro Palette */
+  --background: oklch(0.14 0.01 260); /* Deep Charcoal #0b0e11 */
+  --foreground: oklch(0.95 0.01 260); /* Crisp Off-white #eaecef */
+  --card: oklch(0.18 0.01 260); /* Muted Gray #1e2329 */
+  --card-foreground: oklch(0.95 0.01 260);
+  --popover: oklch(0.18 0.02 260);
+  --popover-foreground: oklch(0.95 0.01 260);
+  --primary: oklch(0.82 0.16 85); /* Binance Gold #F0B90B */
+  --primary-foreground: oklch(0.14 0.01 260); /* Dark text on Gold */
+  --secondary: oklch(0.24 0.02 260); /* Secondary gray #2b3139 */
+  --secondary-foreground: oklch(0.95 0.01 260);
+  --muted: oklch(0.24 0.02 260);
+  --muted-foreground: oklch(0.65 0.01 260);
+  --accent: oklch(0.82 0.16 85);
+  --accent-foreground: oklch(0.14 0.01 260);
+  --destructive: oklch(0.55 0.22 25); /* Trading Red #f6465d */
+  --success: oklch(0.68 0.18 160); /* Trading Green #2ebd85 */
+  --border: oklch(0.28 0.02 260 / 50%); /* Thin, sharp borders */
+  --input: oklch(0.24 0.02 260);
+  --ring: oklch(0.82 0.16 85);
+  
+  --chart-1: oklch(0.68 0.18 160); /* Green for Buy */
+  --chart-2: oklch(0.55 0.22 25); /* Red for Sell */
+  --chart-3: oklch(0.82 0.16 85); /* Yellow for Neutral/Avg */
+  
+  --radius: 4px; /* Sharp, professional radius for trading apps */
+  
+  /* Font Overrides to prevent Serif fallback */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Same as root as we are targeting deep dark by default for trading platforms */
+  --background: oklch(0.14 0.01 260);
+  --foreground: oklch(0.95 0.01 260);
+  --card: oklch(0.18 0.01 260);
+  --card-foreground: oklch(0.95 0.01 260);
+  --primary: oklch(0.82 0.16 85);
+  --primary-foreground: oklch(0.14 0.01 260);
+  --border: oklch(0.28 0.02 260 / 50%);
 }
 
 @layer base {

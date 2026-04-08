@@ -21,12 +21,12 @@ Binance P2P RWF Analyzer — Next.js application that scrapes Binance P2P USDT/R
 ## Commands
 
 ```bash
-npm run dev              # Start Next.js dev server
-npm run build            # Build for production
-npm run lint             # Run ESLint
-npx drizzle-kit push    # Push schema changes to Supabase
-npx drizzle-kit studio  # Open Drizzle Studio (DB browser)
-npx tsx src/scripts/scrape.ts  # Run scraper manually
+pnpm dev                 # Start Next.js dev server
+pnpm build               # Build for production
+pnpm lint                # Run ESLint
+pnpm drizzle-kit push   # Push schema changes to Supabase
+pnpm drizzle-kit studio # Open Drizzle Studio (DB browser)
+pnpm tsx src/scripts/scrape.ts  # Run scraper manually
 ```
 
 ## Environment Variables
