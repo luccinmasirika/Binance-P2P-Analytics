@@ -12,13 +12,15 @@ const HEADERS: Record<string, string> = {
   "Pragma": "no-cache",
   "clienttype": "web",
   "c2ctype": "c2c_web",
+  "lang": "en",
+  "bnc-time-zone": "Africa/Kigali",
+  "csrftoken": "d41d8cd98f00b204e9800998ecf8427e",
   "Origin": "https://p2p.binance.com",
   "Referer": "https://p2p.binance.com/",
 };
 
 export async function fetchAds(params: {
   fiat: string;
-  countryCode?: string;
   tradeType: "BUY" | "SELL";
   page?: number;
   rows?: number;
@@ -30,7 +32,7 @@ export async function fetchAds(params: {
     rows: params.rows ?? 20,
     tradeType: params.tradeType,
     asset: "USDT",
-    countries: params.countryCode ? [params.countryCode] : [],
+    countries: [],
     proMerchantAds: false,
     shieldMerchantAds: false,
     filterType: "all",
@@ -67,14 +69,13 @@ export async function fetchAds(params: {
 export async function fetchAllAds(
   fiat: string,
   tradeType: "BUY" | "SELL",
-  countryCode?: string,
   payTypes?: string[]
 ): Promise<BinanceP2PResponse["data"]> {
   const allAds: BinanceP2PResponse["data"] = [];
   let page = 1;
 
   while (true) {
-    const res = await fetchAds({ fiat, countryCode, tradeType, page, rows: 20, payTypes });
+    const res = await fetchAds({ fiat, tradeType, page, rows: 20, payTypes });
     allAds.push(...res.data);
 
     if (res.data.length === 0 || page * 20 >= res.total) break;

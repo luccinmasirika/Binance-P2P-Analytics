@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRecentAds, getAdPaymentMethods, getDistinctPaymentMethods } from "@/lib/queries/ads";
+import { getRecentAds, getLatestAds, getAdPaymentMethods, getDistinctPaymentMethods } from "@/lib/queries/ads";
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
   const period = params.get("period") as "24h" | "7d" | "30d" | null;
   const limit = params.get("limit") ? Number(params.get("limit")) : 50;
   const offset = params.get("offset") ? Number(params.get("offset")) : 0;
+  const mode = params.get("mode"); // "latest" = last scrape session only
 
   // If requesting payment methods list
   if (params.get("paymentMethods") === "true") {
@@ -17,14 +18,21 @@ export async function GET(request: NextRequest) {
   const fiat = params.get("fiat") || undefined;
   const payType = params.get("payType") || undefined;
 
-  const adsData = await getRecentAds({
-    fiat,
-    tradeType: tradeType ?? undefined,
-    payType,
-    period: period ?? "24h",
-    limit,
-    offset,
-  });
+  const adsData = mode === "latest"
+    ? await getLatestAds({
+        fiat,
+        tradeType: tradeType ?? undefined,
+        payType,
+        limit,
+      })
+    : await getRecentAds({
+        fiat,
+        tradeType: tradeType ?? undefined,
+        payType,
+        period: period ?? "24h",
+        limit,
+        offset,
+      });
 
   const adIds = adsData.map((a) => a.id);
   const payMethods = await getAdPaymentMethods(adIds);

@@ -81,7 +81,7 @@ export function AdsTable({ ads, fiat = "RWF" }: { ads: AdRow[]; fiat?: string })
                   ))}
                 </div>
               </TableCell>
-              <TableCell className="py-2.5 text-[10px] text-muted-foreground text-right font-medium">
+              <TableCell className="py-2.5 text-[10px] text-muted-foreground text-right font-medium" suppressHydrationWarning>
                 {new Date(ad.scrapedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </TableCell>
             </TableRow>

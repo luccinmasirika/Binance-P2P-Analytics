@@ -1,6 +1,6 @@
 import { db } from "../db/client";
-import { ads, adPaymentMethods, advertisers } from "../db/schema";
-import { eq, and, gte, lte, desc, sql, inArray } from "drizzle-orm";
+import { ads, adPaymentMethods, advertisers, scrapeSessions } from "../db/schema";
+import { eq, and, gte, lte, desc, asc, sql, inArray } from "drizzle-orm";
 
 export interface AdsFilter {
   fiat?: string;
@@ -78,6 +78,69 @@ export async function getRecentAds(filter: AdsFilter = {}) {
     .offset(filter.offset ?? 0);
 
   return query;
+}
+
+export interface LatestAdsFilter {
+  fiat?: string;
+  tradeType?: "BUY" | "SELL";
+  payType?: string;
+  limit?: number;
+}
+
+export async function getLatestAds(filter: LatestAdsFilter = {}) {
+  // Find the latest completed session
+  const [latestSession] = await db
+    .select({ id: scrapeSessions.id })
+    .from(scrapeSessions)
+    .where(eq(scrapeSessions.status, "completed"))
+    .orderBy(desc(scrapeSessions.id))
+    .limit(1);
+
+  if (!latestSession) return [];
+
+  const conditions: ReturnType<typeof eq>[] = [
+    eq(ads.sessionId, latestSession.id),
+  ];
+
+  if (filter.fiat) {
+    conditions.push(eq(ads.fiat, filter.fiat));
+  }
+
+  if (filter.tradeType) {
+    conditions.push(eq(ads.tradeType, filter.tradeType));
+  }
+
+  if (filter.payType) {
+    conditions.push(
+      sql`${ads.id} IN (SELECT ad_id FROM ad_payment_methods WHERE pay_type = ${filter.payType})` as any
+    );
+  }
+
+  // Sort by best price: ASC for BUY (cheapest first), DESC for SELL (highest first)
+  const priceOrder = filter.tradeType === "SELL" ? desc(ads.price) : asc(ads.price);
+
+  return db
+    .select({
+      id: ads.id,
+      advNo: ads.advNo,
+      tradeType: ads.tradeType,
+      price: ads.price,
+      surplusAmount: ads.surplusAmount,
+      minAmount: ads.minAmount,
+      maxAmount: ads.maxAmount,
+      tradableQuantity: ads.tradableQuantity,
+      payTimeLimit: ads.payTimeLimit,
+      scrapedAt: ads.scrapedAt,
+      advertiserNickname: advertisers.nickname,
+      advertiserUserNo: advertisers.userNo,
+      advertiserMonthlyOrders: advertisers.monthlyOrderCount,
+      advertiserFinishRate: advertisers.monthlyFinishRate,
+    })
+    .from(ads)
+    .innerJoin(advertisers, eq(ads.advertiserId, advertisers.id))
+    .where(and(...conditions))
+    .orderBy(priceOrder)
+    .limit(filter.limit ?? 50);
 }
 
 export async function getAdPaymentMethods(adIds: number[]) {

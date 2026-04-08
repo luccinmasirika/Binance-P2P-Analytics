@@ -44,15 +44,15 @@ export async function runFullScrape() {
       // 2. Scrape Binance P2P for BUY and SELL with all allowed payment methods
       for (const tradeType of ["BUY", "SELL"] as const) {
         const countryPayTypes = country.payTypes ?? [];
-        console.log(`    Fetching ${tradeType} ads for ${country.fiat} [${country.countryCode}]...`);
-        const items = await fetchAllAds(country.fiat, tradeType, country.countryCode, countryPayTypes);
+        console.log(`    Fetching ${tradeType} ads for ${country.fiat}...`);
+        const items = await fetchAllAds(country.fiat, tradeType, countryPayTypes);
         console.log(`    Found ${items.length} ${tradeType} ads`);
 
         for (const item of items) {
           if (seenAdvNos.has(item.adv.advNo)) continue;
           seenAdvNos.add(item.adv.advNo);
 
-          await insertAd(session.id, country.fiat, item, countryPayTypes);
+          await insertAd(session.id, country.fiat, tradeType, item, countryPayTypes);
           totalAds++;
         }
       }
@@ -105,8 +105,16 @@ export async function runFullScrape() {
   }
 }
 
-async function insertAd(sessionId: number, fiat: string, item: AdItem, allowedPayTypes: string[]) {
+async function insertAd(sessionId: number, fiat: string, tradeType: "BUY" | "SELL", item: AdItem, allowedPayTypes: string[]) {
   const { adv, advertiser: adv_advertiser } = item;
+
+  // Check payment methods BEFORE inserting — skip ads with no matching methods
+  const allowedSet = new Set(allowedPayTypes);
+  const filteredMethods = allowedPayTypes.length > 0
+    ? adv.tradeMethods.filter((m) => m.identifier && allowedSet.has(m.identifier))
+    : adv.tradeMethods.filter((m) => m.identifier);
+
+  if (filteredMethods.length === 0) return;
 
   // Upsert advertiser
   const [advertiser] = await db
@@ -140,7 +148,7 @@ async function insertAd(sessionId: number, fiat: string, item: AdItem, allowedPa
       sessionId,
       fiat,
       advNo: adv.advNo,
-      tradeType: adv.tradeType,
+      tradeType,
       asset: adv.asset,
       price: String(adv.price),
       surplusAmount: String(adv.surplusAmount),
@@ -152,20 +160,14 @@ async function insertAd(sessionId: number, fiat: string, item: AdItem, allowedPa
     })
     .returning();
 
-  // Insert payment methods (only allowed ones for this country)
-  const allowedSet = new Set(allowedPayTypes);
-  const filteredMethods = adv.tradeMethods.filter(
-    (m) => m.identifier && allowedSet.has(m.identifier)
+  // Insert payment methods
+  await db.insert(adPaymentMethods).values(
+    filteredMethods.map((m) => ({
+      adId: ad.id,
+      payType: m.identifier,
+      payMethodName: m.tradeMethodName,
+    }))
   );
-  if (filteredMethods.length > 0) {
-    await db.insert(adPaymentMethods).values(
-      filteredMethods.map((m) => ({
-        adId: ad.id,
-        payType: m.identifier,
-        payMethodName: m.tradeMethodName,
-      }))
-    );
-  }
 }
 
 async function computeDepthSnapshots(sessionId: number, fiat: string) {

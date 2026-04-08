@@ -15,7 +15,6 @@ import { relations } from "drizzle-orm";
 export const countries = pgTable("countries", {
   id: serial("id").primaryKey(),
   fiat: text("fiat").notNull().unique(), // RWF, KES, UGX, etc.
-  countryCode: text("country_code").notNull().default(""), // RW, KE, UG (ISO 3166-1 alpha-2)
   name: text("name").notNull(), // Rwanda, Kenya, Uganda, etc.
   currencySymbol: text("currency_symbol").notNull().default(""), // Fr, KSh, USh
   payTypes: text("pay_types").array(), // Binance API payType codes for this country

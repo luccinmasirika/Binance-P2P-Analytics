@@ -5,9 +5,9 @@ import { eq } from "drizzle-orm";
 
 // Pre-defined countries that can be added in one click
 const AVAILABLE_COUNTRIES = [
-  { fiat: "RWF", countryCode: "RW", name: "Rwanda", currencySymbol: "Fr", payTypes: ["MTNMobileMoney", "EquityBank", "BANK", "MoMoNew", "airtelmoney"] },
-  { fiat: "KES", countryCode: "KE", name: "Kenya", currencySymbol: "KSh", payTypes: ["MPesaKenya", "BANK", "EquityBank", "airtelmoney", "MpesaPaybill"] },
-  { fiat: "UGX", countryCode: "UG", name: "Uganda", currencySymbol: "USh", payTypes: ["airtelmoney", "MTNMobileMoney", "MoMoNew", "Chippercash", "BANK"] },
+  { fiat: "RWF", name: "Rwanda", currencySymbol: "Fr", payTypes: ["MTNMobileMoney", "EquityBank", "BANK", "MoMoNew", "airtelmoney"] },
+  { fiat: "KES", name: "Kenya", currencySymbol: "KSh", payTypes: ["MPesaKenya", "BANK", "EquityBank", "airtelmoney", "MpesaPaybill"] },
+  { fiat: "UGX", name: "Uganda", currencySymbol: "USh", payTypes: ["airtelmoney", "MTNMobileMoney", "MoMoNew", "Chippercash", "BANK"] },
 ];
 
 export async function GET() {
@@ -32,14 +32,18 @@ export async function POST(request: NextRequest) {
     .insert(countries)
     .values({
       fiat: preset.fiat,
-      countryCode: preset.countryCode,
       name: preset.name,
       currencySymbol: preset.currencySymbol,
       payTypes: preset.payTypes,
     })
     .onConflictDoUpdate({
       target: countries.fiat,
-      set: { isActive: true },
+      set: {
+        isActive: true,
+        name: preset.name,
+        currencySymbol: preset.currencySymbol,
+        payTypes: preset.payTypes,
+      },
     })
     .returning();
 
