@@ -103,4 +103,15 @@
   html {
     @apply font-sans;
   }
+
+  /* Global a11y & UX Improvements */
+  button:not(:disabled), 
+  a, 
+  [role="button"] {
+    @apply cursor-pointer;
+  }
+
+  button:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
 }

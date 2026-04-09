@@ -32,14 +32,17 @@ export function ScrapeButton() {
       size="sm"
       onClick={handleScrape}
       disabled={loading}
+      aria-label="Lancer le scan du marché P2P"
     >
-      {loading
-        ? "Scan en cours..."
-        : status === "success"
-          ? "Scan termine"
-          : status === "error"
-            ? "Erreur"
-            : "Lancer le scan"}
+      <span aria-live="polite">
+        {loading
+          ? "Scan en cours..."
+          : status === "success"
+            ? "Scan terminé"
+            : status === "error"
+              ? "Erreur"
+              : "Lancer le scan"}
+      </span>
     </Button>
   );
 }

@@ -73,7 +73,7 @@ export async function runSimulation(params: SimulationParams): Promise<Simulatio
         s.price AS sell_price,
         s.price - b.price AS spread
       FROM ranked b
-      INNER JOIN ranked s ON b.time_bucket = s.time_bucket + INTERVAL '10 minutes'
+      INNER JOIN ranked s ON b.time_bucket = s.time_bucket - INTERVAL '1 hour'
       WHERE b.trade_type = 'BUY' AND b.rank = ${priceStrategy}
         AND s.trade_type = 'SELL' AND s.rank = ${priceStrategy}
     )

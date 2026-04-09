@@ -22,9 +22,30 @@ interface SpreadChartProps {
   fiat?: string;
 }
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const value = payload[0].value;
+    return (
+      <div className="bg-card/95 border border-border p-3 rounded shadow-xl backdrop-blur-sm">
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2 border-b border-border/50 pb-1">{label}</p>
+        <div className="flex items-center justify-between gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+            <span className="text-[11px] font-medium text-white/80 uppercase">Spread :</span>
+          </div>
+          <span className="text-[11px] font-mono font-bold text-primary">
+            {Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 export function SpreadChart({ data, fiat = "RWF" }: SpreadChartProps) {
   const chartData = data.map((d) => ({
-    time: new Date(d.time_bucket).toLocaleString("fr-RW", {
+    time: new Date(d.time_bucket).toLocaleString("fr-FR", {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -34,21 +55,37 @@ export function SpreadChart({ data, fiat = "RWF" }: SpreadChartProps) {
   }));
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <AreaChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-        <XAxis dataKey="time" tick={{ fontSize: 11 }} />
-        <YAxis tick={{ fontSize: 11 }} />
-        <Tooltip
-          formatter={(value) => [`${Number(value).toFixed(2)} ${fiat}`, "Spread"]}
+    <ResponsiveContainer width="100%" height={350}>
+      <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id="colorSpread" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3}/>
+            <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+        <XAxis 
+          dataKey="time" 
+          axisLine={false}
+          tickLine={false}
+          tick={{ fontSize: 10, fill: "rgba(150, 150, 150, 0.5)" }} 
+          dy={10}
         />
+        <YAxis 
+          axisLine={false}
+          tickLine={false}
+          tick={{ fontSize: 10, fill: "rgba(150, 150, 150, 0.5)" }} 
+          dx={-10}
+        />
+        <Tooltip content={<CustomTooltip />} />
         <Area
           type="monotone"
           dataKey="spread"
-          stroke="#f59e0b"
-          fill="#f59e0b"
-          fillOpacity={0.2}
+          stroke="var(--primary)"
+          fillOpacity={1}
+          fill="url(#colorSpread)"
           strokeWidth={2}
+          activeDot={{ r: 4, strokeWidth: 0 }}
         />
       </AreaChart>
     </ResponsiveContainer>

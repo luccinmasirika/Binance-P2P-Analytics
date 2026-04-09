@@ -31,32 +31,39 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
       <body className="h-screen w-screen overflow-hidden flex bg-background text-foreground font-sans">
+        {/* Lien d'évitement pour l'accessibilité clavier */}
+        <a 
+          href="#main-content" 
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded focus:shadow-lg focus:font-bold focus:outline-none"
+        >
+          Passer au contenu principal
+        </a>
         
-        {/* Sidebar - Binance Style Navigation */}
-        <Sidebar className="hidden lg:flex w-64 shrink-0 border-r border-border bg-card" />
+        {/* Sidebar - Positionnée latéralement */}
+        <Sidebar aria-label="Menu principal" className="hidden lg:flex w-64 shrink-0 border-r border-border bg-card" />
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Top Bar - Functional Trading Pairs Status */}
-          <header className="h-14 border-b border-border bg-card flex items-center shrink-0 px-6 justify-between">
+          {/* Barre supérieure - Informations de trading */}
+          <header className="h-14 border-b border-border bg-card flex items-center shrink-0 px-6 justify-between select-none">
             <div className="flex items-center gap-6 overflow-hidden">
               <div className="flex items-center gap-2 font-bold text-sm tracking-tight text-white shrink-0">
-                <div className="w-6 h-6 bg-primary rounded flex items-center justify-center text-primary-foreground font-mono text-[10px]">
+                <div className="w-6 h-6 bg-primary rounded flex items-center justify-center text-primary-foreground font-mono text-[10px]" aria-hidden="true">
                   P2P
                 </div>
                 Analyzer
               </div>
               
-              <div className="h-4 w-px bg-border mx-2 hidden md:block" />
+              <div className="h-4 w-px bg-border mx-2 hidden md:block" aria-hidden="true" />
               
               <div className="flex items-center gap-4 text-xs font-medium overflow-hidden">
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-muted-foreground">Pair:</span>
+                  <span className="text-muted-foreground">Paire :</span>
                   <span className="text-white">USDT / FIAT</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-muted-foreground">Network:</span>
+                  <span className="text-muted-foreground">Réseau :</span>
                   <span className="text-success flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" aria-hidden="true" />
                     Binance
                   </span>
                 </div>
@@ -65,16 +72,20 @@ export default function RootLayout({
             
             <div className="flex items-center gap-4">
               <ScrapeButton />
-              <div className="h-8 w-px bg-border mx-2" />
-              <div className="h-8 w-8 rounded bg-secondary flex items-center justify-center text-xs text-muted-foreground font-bold border border-border">
+              <div className="h-8 w-px bg-border mx-2" aria-hidden="true" />
+              <div 
+                className="h-8 w-8 rounded bg-secondary flex items-center justify-center text-xs text-muted-foreground font-bold border border-border"
+                aria-label="Profil utilisateur : Luccin"
+                title="Luccin"
+              >
                 L
               </div>
             </div>
           </header>
 
-          {/* Main Content Area */}
+          {/* Zone de contenu principal */}
           <div className="flex-1 overflow-y-auto bg-background/50">
-            <main className="w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8">
+            <main id="main-content" className="w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8 outline-none">
               {children}
             </main>
           </div>

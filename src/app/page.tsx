@@ -79,33 +79,34 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-6">
           
           {/* Main Chart Area - Full Width */}
-          <div className="bg-card border border-border rounded shadow-sm overflow-hidden min-h-[540px]">
+          <section className="bg-card border border-border rounded shadow-sm overflow-hidden min-h-[540px]" aria-labelledby="chart-section-title">
+            <h2 id="chart-section-title" className="sr-only">Analyses Graphiques</h2>
             <Tabs defaultValue="price" className="w-full">
               <div className="flex items-center justify-between border-b border-border bg-card/30 px-6">
                 <TabsList className="bg-transparent h-auto p-0 space-x-8">
-                  <TabsTrigger value="price" className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0 py-4 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-white transition-colors">Price Analysis</TabsTrigger>
-                  <TabsTrigger value="spread" className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0 py-4 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-white transition-colors">Spread History</TabsTrigger>
-                  <TabsTrigger value="volume" className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0 py-4 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-white transition-colors">Market Depth</TabsTrigger>
-                  <TabsTrigger value="heatmap" className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0 py-4 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-white transition-colors">Spread Heatmap</TabsTrigger>
+                  <TabsTrigger value="price" className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0 py-4 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-white transition-colors">Analyse des Prix</TabsTrigger>
+                  <TabsTrigger value="spread" className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0 py-4 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-white transition-colors">Historique des Spreads</TabsTrigger>
+                  <TabsTrigger value="volume" className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0 py-4 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-white transition-colors">Profondeur du Marché</TabsTrigger>
+                  <TabsTrigger value="heatmap" className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0 py-4 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-white transition-colors">Heatmap des spreads</TabsTrigger>
                 </TabsList>
                 
                 <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-success/10 rounded border border-success/20">
-                    <TrendingUp className="w-3 h-3 text-success" />
-                    <span className="text-[10px] font-bold text-success uppercase">Live Scanner Active</span>
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-success/10 rounded border border-success/20" aria-live="polite">
+                    <TrendingUp className="w-3 h-3 text-success" aria-hidden="true" />
+                    <span className="text-[10px] font-bold text-success uppercase">Scanner en direct actif</span>
                   </div>
                   <GranularitySelector value={granularity} onChange={setGranularity} />
                 </div>
               </div>
 
               <div className="p-6 bg-background/20 min-h-[480px]">
-                <TabsContent value="price" className="m-0">
+                <TabsContent value="price" className="m-0 focus-visible:outline-none">
                   {priceData.length > 0 ? <PriceChart data={priceData} forexRate={stats?.forexRate} fiat={fiat} /> : <EmptyState />}
                 </TabsContent>
-                <TabsContent value="spread" className="m-0">
+                <TabsContent value="spread" className="m-0 focus-visible:outline-none">
                   {spreadData.length > 0 ? <SpreadChart data={spreadData} fiat={fiat} /> : <EmptyState />}
                 </TabsContent>
-                <TabsContent value="volume" className="m-0">
+                <TabsContent value="volume" className="m-0 focus-visible:outline-none">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[440px]">
                     <div className="h-full bg-card/20 rounded border border-border/30 p-2">
                       <DepthChart data={depthData} />
@@ -115,49 +116,53 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </TabsContent>
-                <TabsContent value="heatmap" className="m-0">
+                <TabsContent value="heatmap" className="m-0 focus-visible:outline-none">
                   {heatmapData.length > 0 ? <HeatmapChart data={heatmapData} fiat={fiat} /> : <EmptyState />}
                 </TabsContent>
               </div>
             </Tabs>
-          </div>
+          </section>
 
           {/* Action Toolbar & Live Order Book */}
           <div className="space-y-4">
             
             {/* Horizontal Filter Toolbar */}
-            <div className="bg-card/50 border border-border rounded p-3 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+            <div className="bg-card/50 border border-border rounded p-3 flex flex-wrap items-center justify-between gap-4 shadow-sm" role="toolbar" aria-label="Filtres du marché">
               <div className="flex items-center gap-3">
-                <div className="flex bg-background/60 p-1 rounded-md border border-border/50 min-w-[200px]">
+                <div className="flex bg-background/60 p-1 rounded-md border border-border/50 min-w-[200px]" role="group" aria-label="Type de transaction">
                   <button 
                     onClick={() => setTradeType("BUY")}
-                    className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded transition-all duration-200 ${
+                    aria-label="Afficher les annonces d'achat"
+                    aria-pressed={tradeType === "BUY"}
+                    className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded cursor-pointer transition-all duration-200 focus-visible:ring-1 focus-visible:ring-primary ${
                       tradeType === "BUY" 
                         ? "bg-success text-white shadow-lg shadow-success/20" 
                         : "text-muted-foreground hover:text-white"
                     }`}
                   >
-                    Buy
+                    Achat
                   </button>
                   <button 
                     onClick={() => setTradeType("SELL")}
-                    className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded transition-all duration-200 ${
+                    aria-label="Afficher les annonces de vente"
+                    aria-pressed={tradeType === "SELL"}
+                    className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded cursor-pointer transition-all duration-200 focus-visible:ring-1 focus-visible:ring-primary ${
                       tradeType === "SELL" 
                         ? "bg-destructive text-white shadow-lg shadow-destructive/20" 
                         : "text-muted-foreground hover:text-white"
                     }`}
                   >
-                    Sell
+                    Vente
                   </button>
                 </div>
                 
-                <div className="h-6 w-px bg-border/50 mx-2" />
+                <div className="h-6 w-px bg-border/50 mx-2" aria-hidden="true" />
                 
                 <div className="flex flex-col">
-                  <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 pl-1">Sync Status</span>
-                  <div className="flex items-center gap-2 px-2 py-1 bg-background/40 rounded border border-border/50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                    <span className="text-[10px] font-bold text-white uppercase tracking-tighter">Connected</span>
+                  <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 pl-1">État de Sync</span>
+                  <div className="flex items-center gap-2 px-2 py-1 bg-background/40 rounded border border-border/50" aria-live="polite">
+                    <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" aria-hidden="true" />
+                    <span className="text-[10px] font-bold text-white uppercase tracking-tighter">Connecté</span>
                   </div>
                 </div>
               </div>
@@ -175,20 +180,20 @@ export default function DashboardPage() {
             </div>
 
             {/* Table Container */}
-            <div className="bg-card border border-border rounded shadow-sm overflow-hidden">
+            <section className="bg-card border border-border rounded shadow-sm overflow-hidden" aria-labelledby="orderbook-title">
               <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-card/30">
                 <div className="flex items-center gap-3">
-                  <div className="w-1.5 h-4 bg-primary rounded-full"></div>
-                  <h2 className="text-[11px] font-bold text-white uppercase tracking-widest">Live Market Order Book</h2>
+                  <div className="w-1.5 h-4 bg-primary rounded-full" aria-hidden="true"></div>
+                  <h2 id="orderbook-title" className="text-[11px] font-bold text-white uppercase tracking-widest">Carnet d'ordres en direct</h2>
                 </div>
-                <div className="text-[10px] font-medium text-muted-foreground italic" suppressHydrationWarning>
+                <div className="text-[10px] font-medium text-muted-foreground italic" suppressHydrationWarning aria-live="polite">
                   {recentAds.length > 0 && recentAds[0].scrapedAt
-                    ? `Last scan: ${new Date(recentAds[0].scrapedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · ${recentAds.length} ads`
-                    : `${recentAds.length} ads`}
+                    ? `Dernier scan : ${new Date(recentAds[0].scrapedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · ${recentAds.length} annonces`
+                    : `${recentAds.length} annonces affichées`}
                 </div>
               </div>
               <AdsTable ads={recentAds} fiat={fiat} />
-            </div>
+            </section>
           </div>
         </div>
       )}
@@ -206,12 +211,13 @@ const GRANULARITIES = [
 
 function GranularitySelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div className="flex bg-secondary p-0.5 rounded border border-border">
+    <div className="flex bg-secondary p-0.5 rounded border border-border" role="group" aria-label="Granularité temporelle">
       {GRANULARITIES.map((g) => (
         <button
           key={g.value}
           onClick={() => onChange(g.value)}
-          className={`px-3 py-1 text-[10px] font-bold rounded transition-all ${
+          aria-pressed={value === g.value}
+          className={`px-3 py-1 text-[10px] font-bold rounded cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary ${
             value === g.value
               ? "bg-card text-white shadow-sm"
               : "text-muted-foreground hover:text-white"
@@ -226,10 +232,11 @@ function GranularitySelector({ value, onChange }: { value: string; onChange: (v:
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center h-[440px] text-muted-foreground border border-dashed border-border/40 rounded bg-muted/5">
-      <RefreshCw className="w-10 h-10 mb-4 opacity-5 animate-spin-slow" />
-      <p className="text-xs font-bold uppercase tracking-widest">Connect Scraper</p>
-      <p className="text-[10px] mt-1">Initiate a market scan to populate the analytics dashboard.</p>
+    <div className="flex flex-col items-center justify-center h-[440px] text-muted-foreground border border-dashed border-border/40 rounded bg-muted/5" role="status">
+      <RefreshCw className="w-10 h-10 mb-4 opacity-5 animate-spin-slow" aria-hidden="true" />
+      <p className="text-xs font-bold uppercase tracking-widest">Connectez le scanner</p>
+      <p className="text-[10px] mt-1 text-center max-w-[200px]">Lancez un scan du marché pour alimenter le tableau de bord.</p>
     </div>
   );
 }
+

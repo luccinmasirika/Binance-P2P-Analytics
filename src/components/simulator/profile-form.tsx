@@ -67,7 +67,7 @@ export function ProfileForm({ onSubmit, loading }: ProfileFormProps) {
               type="number"
               value={capital}
               onChange={(e) => setCapital(Number(e.target.value))}
-              min={1000}
+              min={10000}
               step={10000}
             />
             <p className="text-xs text-muted-foreground">
