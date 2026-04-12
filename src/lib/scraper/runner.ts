@@ -3,6 +3,7 @@ import { db } from "../db/client";
 import {
   scrapeSessions,
   advertisers,
+  advertiserSnapshots,
   ads,
   adPaymentMethods,
   forexRates,
@@ -40,6 +41,7 @@ export async function runFullScrape() {
     for (const country of activeCountries) {
       console.log(`  Scraping ${country.name} (${country.fiat})...`);
       const seenAdvNos = new Set<string>();
+      const snapshottedAdvertiserIds = new Set<number>();
 
       // 2. Scrape Binance P2P for BUY and SELL with all allowed payment methods
       for (const tradeType of ["BUY", "SELL"] as const) {
@@ -52,7 +54,14 @@ export async function runFullScrape() {
           if (seenAdvNos.has(item.adv.advNo)) continue;
           seenAdvNos.add(item.adv.advNo);
 
-          await insertAd(session.id, country.fiat, tradeType, item, countryPayTypes);
+          await insertAd(
+            session.id,
+            country.fiat,
+            tradeType,
+            item,
+            countryPayTypes,
+            snapshottedAdvertiserIds
+          );
           totalAds++;
         }
       }
@@ -105,7 +114,14 @@ export async function runFullScrape() {
   }
 }
 
-async function insertAd(sessionId: number, fiat: string, tradeType: "BUY" | "SELL", item: AdItem, allowedPayTypes: string[]) {
+async function insertAd(
+  sessionId: number,
+  fiat: string,
+  tradeType: "BUY" | "SELL",
+  item: AdItem,
+  allowedPayTypes: string[],
+  snapshottedAdvertiserIds: Set<number>
+) {
   const { adv, advertiser: adv_advertiser } = item;
 
   // Check payment methods BEFORE inserting — skip ads with no matching methods
@@ -140,6 +156,19 @@ async function insertAd(sessionId: number, fiat: string, tradeType: "BUY" | "SEL
       },
     })
     .returning();
+
+  // Insert advertiser snapshot once per session per advertiser
+  if (!snapshottedAdvertiserIds.has(advertiser.id)) {
+    snapshottedAdvertiserIds.add(advertiser.id);
+    await db.insert(advertiserSnapshots).values({
+      sessionId,
+      advertiserId: advertiser.id,
+      monthOrderCount: adv_advertiser.monthOrderCount,
+      monthFinishRate: String(adv_advertiser.monthFinishRate),
+      positiveRate: String(adv_advertiser.positiveRate),
+      isOnline: adv_advertiser.isOnline ?? null,
+    });
+  }
 
   // Insert ad
   const [ad] = await db

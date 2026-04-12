@@ -6,6 +6,7 @@ import {
   numeric,
   timestamp,
   boolean,
+  index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -55,31 +56,86 @@ export const advertisers = pgTable("advertisers", {
 
 export const advertisersRelations = relations(advertisers, ({ many }) => ({
   ads: many(ads),
+  snapshots: many(advertiserSnapshots),
 }));
+
+// ──────────────────────────────────────────────
+// advertiser_snapshots (per-session metric history)
+// ──────────────────────────────────────────────
+export const advertiserSnapshots = pgTable(
+  "advertiser_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    sessionId: integer("session_id")
+      .notNull()
+      .references(() => scrapeSessions.id),
+    advertiserId: integer("advertiser_id")
+      .notNull()
+      .references(() => advertisers.id),
+    monthOrderCount: integer("month_order_count"),
+    monthFinishRate: numeric("month_finish_rate"),
+    positiveRate: numeric("positive_rate"),
+    isOnline: boolean("is_online"),
+    scrapedAt: timestamp("scraped_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    advertiserScrapedIdx: index(
+      "advertiser_snapshots_advertiser_scraped_idx"
+    ).on(t.advertiserId, t.scrapedAt),
+    sessionIdx: index("advertiser_snapshots_session_idx").on(t.sessionId),
+  })
+);
+
+export const advertiserSnapshotsRelations = relations(
+  advertiserSnapshots,
+  ({ one }) => ({
+    advertiser: one(advertisers, {
+      fields: [advertiserSnapshots.advertiserId],
+      references: [advertisers.id],
+    }),
+    session: one(scrapeSessions, {
+      fields: [advertiserSnapshots.sessionId],
+      references: [scrapeSessions.id],
+    }),
+  })
+);
 
 // ──────────────────────────────────────────────
 // ads (snapshot model)
 // ──────────────────────────────────────────────
-export const ads = pgTable("ads", {
-  id: serial("id").primaryKey(),
-  sessionId: integer("session_id")
-    .notNull()
-    .references(() => scrapeSessions.id),
-  advNo: text("adv_no").notNull(),
-  fiat: text("fiat").notNull().default("RWF"),
-  tradeType: text("trade_type").notNull(), // BUY | SELL
-  asset: text("asset").notNull().default("USDT"),
-  price: numeric("price").notNull(),
-  surplusAmount: numeric("surplus_amount"),
-  minAmount: numeric("min_amount"),
-  maxAmount: numeric("max_amount"),
-  tradableQuantity: numeric("tradable_quantity"),
-  payTimeLimit: integer("pay_time_limit"),
-  advertiserId: integer("advertiser_id")
-    .notNull()
-    .references(() => advertisers.id),
-  scrapedAt: timestamp("scraped_at").notNull().defaultNow(),
-});
+export const ads = pgTable(
+  "ads",
+  {
+    id: serial("id").primaryKey(),
+    sessionId: integer("session_id")
+      .notNull()
+      .references(() => scrapeSessions.id),
+    advNo: text("adv_no").notNull(),
+    fiat: text("fiat").notNull().default("RWF"),
+    tradeType: text("trade_type").notNull(), // BUY | SELL
+    asset: text("asset").notNull().default("USDT"),
+    price: numeric("price").notNull(),
+    surplusAmount: numeric("surplus_amount"),
+    minAmount: numeric("min_amount"),
+    maxAmount: numeric("max_amount"),
+    tradableQuantity: numeric("tradable_quantity"),
+    payTimeLimit: integer("pay_time_limit"),
+    advertiserId: integer("advertiser_id")
+      .notNull()
+      .references(() => advertisers.id),
+    scrapedAt: timestamp("scraped_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    advNoScrapedIdx: index("ads_adv_no_scraped_at_idx").on(
+      t.advNo,
+      t.scrapedAt
+    ),
+    advertiserScrapedIdx: index("ads_advertiser_scraped_at_idx").on(
+      t.advertiserId,
+      t.scrapedAt
+    ),
+  })
+);
 
 export const adsRelations = relations(ads, ({ one, many }) => ({
   session: one(scrapeSessions, {

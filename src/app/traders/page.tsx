@@ -5,6 +5,15 @@ import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TraderTable } from "@/components/traders/trader-table";
+import {
+  ProfitTable,
+  type ProfitEstimate,
+} from "@/components/traders/profit-table";
+import {
+  PeriodSelector,
+  type PeriodPreset,
+  getPeriodRange,
+} from "@/components/traders/period-selector";
 import { Badge } from "@/components/ui/badge";
 import {
   LineChart,
@@ -32,6 +41,13 @@ function TradersContent() {
   const [marketMakers, setMarketMakers] = useState([]);
   const [traderProfile, setTraderProfile] = useState<any>(null);
   const [traderPatterns, setTraderPatterns] = useState<any[]>([]);
+  const [profitData, setProfitData] = useState<{
+    period: PeriodPreset;
+    estimates: ProfitEstimate[];
+  } | null>(null);
+  const [profitPeriod, setProfitPeriod] = useState<PeriodPreset>("7d");
+  const profitLoading = profitData?.period !== profitPeriod;
+  const profitEstimates = profitLoading ? [] : profitData!.estimates;
 
   useEffect(() => {
     fetch("/api/traders?type=top&limit=30").then((r) => r.json()).then(setTopTraders);
@@ -49,6 +65,29 @@ function TradersContent() {
     }
   }, [selectedUserNo]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const { from, to } = getPeriodRange(profitPeriod);
+    const params = new URLSearchParams({
+      from: from.toISOString(),
+      to: to.toISOString(),
+      limit: "100",
+    });
+    fetch(`/api/traders/profit?${params.toString()}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) {
+          setProfitData({
+            period: profitPeriod,
+            estimates: data.estimates ?? [],
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [profitPeriod]);
+
   if (selectedUserNo && traderProfile) {
     return <TraderDetail profile={traderProfile} patterns={traderPatterns} />;
   }
@@ -61,6 +100,7 @@ function TradersContent() {
         <TabsList>
           <TabsTrigger value="top">Top Traders</TabsTrigger>
           <TabsTrigger value="marketMakers">Market Makers</TabsTrigger>
+          <TabsTrigger value="profits">Profits estimés</TabsTrigger>
         </TabsList>
 
         <TabsContent value="top">
@@ -81,6 +121,35 @@ function TradersContent() {
             </CardHeader>
             <CardContent>
               <TraderTable traders={marketMakers} showPresence />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="profits">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <CardTitle>Profits estimés</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Inférence basée sur la décroissance du tradable_quantity
+                    entre snapshots, validée contre le delta monthOrderCount.
+                  </p>
+                </div>
+                <PeriodSelector
+                  value={profitPeriod}
+                  onChange={setProfitPeriod}
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {profitLoading ? (
+                <div className="text-center text-muted-foreground py-8">
+                  Calcul en cours...
+                </div>
+              ) : (
+                <ProfitTable estimates={profitEstimates} />
+              )}
             </CardContent>
           </Card>
         </TabsContent>

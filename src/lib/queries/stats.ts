@@ -11,7 +11,6 @@ function payTypeJoin(payType?: string) {
 }
 
 export async function getCurrentStats(fiat: string = "RWF", payType?: string) {
-  const interval = "15 minutes";
   const pm = payTypeJoin(payType);
 
   const result = await db.execute(sql`
@@ -25,7 +24,9 @@ export async function getCurrentStats(fiat: string = "RWF", payType?: string) {
     FROM ads
     ${pm.join}
     WHERE ads.fiat = ${fiat}
-      AND ads.scraped_at > NOW() - INTERVAL '${sql.raw(interval)}'
+      AND ads.session_id = (
+        SELECT MAX(id) FROM scrape_sessions WHERE status = 'completed'
+      )
       ${pm.where}
   `);
 

@@ -1,11 +1,13 @@
 import { db } from "../db/client";
 import { marketDepthSnapshots } from "../db/schema";
-import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 
 export async function getLatestDepth(tradeType?: "BUY" | "SELL") {
   const conditions = [
     isNull(marketDepthSnapshots.payType),
-    sql`${marketDepthSnapshots.scrapedAt} > NOW() - INTERVAL '15 minutes'`,
+    sql`${marketDepthSnapshots.sessionId} = (
+      SELECT MAX(id) FROM scrape_sessions WHERE status = 'completed'
+    )`,
   ];
 
   if (tradeType) {
@@ -27,7 +29,9 @@ export async function getDepthByPaymentMethod() {
       SUM(CAST(total_quantity AS numeric)) AS total_volume,
       SUM(ad_count) AS total_ads
     FROM market_depth_snapshots
-    WHERE scraped_at > NOW() - INTERVAL '15 minutes'
+    WHERE session_id = (
+        SELECT MAX(id) FROM scrape_sessions WHERE status = 'completed'
+      )
       AND pay_type IS NOT NULL
     GROUP BY trade_type, pay_type
     ORDER BY total_volume DESC
@@ -43,7 +47,10 @@ export async function getDepthComparison(period: "24h" | "7d" = "24h") {
     WITH current AS (
       SELECT trade_type, SUM(CAST(total_quantity AS numeric)) AS volume
       FROM market_depth_snapshots
-      WHERE scraped_at > NOW() - INTERVAL '15 minutes' AND pay_type IS NULL
+      WHERE session_id = (
+          SELECT MAX(id) FROM scrape_sessions WHERE status = 'completed'
+        )
+        AND pay_type IS NULL
       GROUP BY trade_type
     ),
     past AS (

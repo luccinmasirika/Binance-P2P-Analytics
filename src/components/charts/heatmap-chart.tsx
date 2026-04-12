@@ -14,6 +14,8 @@ interface HeatmapChartProps {
 
 import { useState } from "react";
 
+const DAYS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"] as const;
+
 const TooltipBox = ({ point, day, hour, fiat }: { point?: HeatmapDataPoint; day: string; hour: number; fiat: string }) => {
   if (!point) return null;
   return (
