@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { Filters } from "@/components/dashboard/filters";
-import { AdsTable } from "@/components/dashboard/ads-table";
+import { AdsTable, type AdRow } from "@/components/dashboard/ads-table";
 import { PriceChart } from "@/components/charts/price-chart";
 import { SpreadChart } from "@/components/charts/spread-chart";
 import { VolumeChart } from "@/components/charts/volume-chart";
@@ -23,7 +23,7 @@ export default function DashboardPage() {
   const [spreadData, setSpreadData] = useState([]);
   const [heatmapData, setHeatmapData] = useState([]);
   const [depthData, setDepthData] = useState([]);
-  const [recentAds, setRecentAds] = useState([]);
+  const [recentAds, setRecentAds] = useState<AdRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
 

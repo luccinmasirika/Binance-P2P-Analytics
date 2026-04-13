@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
-interface AdRow {
+export interface AdRow {
   id: number;
   tradeType: string;
   price: string;
