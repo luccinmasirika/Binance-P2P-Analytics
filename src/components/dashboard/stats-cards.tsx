@@ -10,9 +10,22 @@ interface Stats {
   sellVolume: number;
   forexRate: number | null;
   p2pPremium: number | null;
+  effectiveBuyCost?: number | null;
+  effectiveSellRevenue?: number | null;
+  effectiveSpread?: number | null;
+  effectiveP2pPremium?: number | null;
 }
 
 export function StatsCards({ stats, fiat = "RWF" }: { stats: Stats; fiat?: string }) {
+  const buyCostDelta =
+    stats.effectiveBuyCost && stats.bestBuyPrice
+      ? stats.effectiveBuyCost - stats.bestBuyPrice
+      : null;
+  const sellRevenueDelta =
+    stats.effectiveSellRevenue && stats.bestSellPrice
+      ? stats.effectiveSellRevenue - stats.bestSellPrice
+      : null;
+
   const cards = [
     {
       title: "Best Buy Price",
@@ -21,16 +34,51 @@ export function StatsCards({ stats, fiat = "RWF" }: { stats: Stats; fiat?: strin
       color: "text-emerald-500",
     },
     {
+      title: "Coût net (achat)",
+      value: stats.effectiveBuyCost ? `${stats.effectiveBuyCost.toFixed(2)} ${fiat}` : "N/A",
+      description:
+        buyCostDelta !== null
+          ? `+${buyCostDelta.toFixed(2)} ${fiat} (frais send)`
+          : "",
+      color: "text-emerald-500/70",
+    },
+    {
       title: "Best Sell Price",
       value: stats.bestSellPrice ? `${stats.bestSellPrice.toFixed(2)} ${fiat}` : "N/A",
       description: `${stats.sellAdCount} Ads`,
       color: "text-rose-500",
     },
     {
+      title: "Revenu net (vente)",
+      value: stats.effectiveSellRevenue ? `${stats.effectiveSellRevenue.toFixed(2)} ${fiat}` : "N/A",
+      description:
+        sellRevenueDelta !== null
+          ? `${sellRevenueDelta.toFixed(2)} ${fiat} (frais cash-out)`
+          : "",
+      color: "text-rose-500/70",
+    },
+    {
       title: "Current Spread",
-      value: stats.spread ? `${stats.spread.toFixed(2)} ${fiat}` : "N/A",
-      description: stats.spread ? `${((stats.spread / (stats.bestBuyPrice || 1)) * 100).toFixed(2)}%` : "",
+      value: stats.spread !== null ? `${stats.spread.toFixed(2)} ${fiat}` : "N/A",
+      description: stats.spread !== null && stats.bestBuyPrice
+        ? `${((stats.spread / stats.bestBuyPrice) * 100).toFixed(2)}%`
+        : "",
       color: "text-primary",
+    },
+    {
+      title: "Spread net",
+      value:
+        stats.effectiveSpread !== null && stats.effectiveSpread !== undefined
+          ? `${stats.effectiveSpread.toFixed(2)} ${fiat}`
+          : "N/A",
+      description:
+        stats.effectiveSpread !== null && stats.effectiveSpread !== undefined && stats.effectiveBuyCost
+          ? `${((stats.effectiveSpread / stats.effectiveBuyCost) * 100).toFixed(2)}% après frais`
+          : "",
+      color:
+        stats.effectiveSpread !== null && stats.effectiveSpread !== undefined && stats.effectiveSpread > 0
+          ? "text-emerald-400"
+          : "text-rose-400",
     },
     {
       title: "Buy Volume",

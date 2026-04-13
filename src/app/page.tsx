@@ -10,14 +10,15 @@ import { SpreadChart } from "@/components/charts/spread-chart";
 import { VolumeChart } from "@/components/charts/volume-chart";
 import { DepthChart } from "@/components/charts/depth-chart";
 import { HeatmapChart } from "@/components/charts/heatmap-chart";
-import { RefreshCw, TrendingUp } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 export default function DashboardPage() {
   const [fiat, setFiat] = useState("RWF");
   const [tradeType, setTradeType] = useState("BUY");
   const [period, setPeriod] = useState("24h");
   const [payType, setPayType] = useState("all");
-  const [granularity, setGranularity] = useState("hour");
+  const [granularity, setGranularity] = useState("1h");
+  const [activeTab, setActiveTab] = useState("price");
   const [stats, setStats] = useState<any>(null);
   const [priceData, setPriceData] = useState([]);
   const [spreadData, setSpreadData] = useState([]);
@@ -40,7 +41,7 @@ export default function DashboardPage() {
           fetch(`/api/stats?type=current&${q}`),
           fetch(`/api/stats?type=price&period=${period}&granularity=${granularity}&${q}`),
           fetch(`/api/stats?type=spread&period=${period}&granularity=${granularity}&${q}`),
-          fetch(`/api/stats?type=heatmap&${q}`),
+          fetch(`/api/stats?type=heatmap&granularity=${granularity}&${q}`),
           fetch(`/api/depth?type=current&${q}`),
           fetch(`/api/ads?mode=latest&limit=50&${q}`),
         ]);
@@ -58,6 +59,9 @@ export default function DashboardPage() {
   }, [period, fiat, tradeType, payType, granularity]);
 
   useEffect(() => {
+    setPriceData([]);
+    setSpreadData([]);
+    setHeatmapData([]);
     fetchData();
     const interval = setInterval(fetchData, 60_000);
     return () => clearInterval(interval);
@@ -81,7 +85,7 @@ export default function DashboardPage() {
           {/* Main Chart Area - Full Width */}
           <section className="bg-card border border-border rounded shadow-sm overflow-hidden min-h-[540px]" aria-labelledby="chart-section-title">
             <h2 id="chart-section-title" className="sr-only">Analyses Graphiques</h2>
-            <Tabs defaultValue="price" className="w-full">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <div className="flex items-center justify-between border-b border-border bg-card/30 px-6">
                 <TabsList className="bg-transparent h-auto p-0 space-x-8">
                   <TabsTrigger value="price" className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0 py-4 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-white transition-colors">Analyse des Prix</TabsTrigger>
@@ -90,21 +94,17 @@ export default function DashboardPage() {
                   <TabsTrigger value="heatmap" className="bg-transparent rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0 py-4 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-white transition-colors">Heatmap des spreads</TabsTrigger>
                 </TabsList>
                 
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-success/10 rounded border border-success/20" aria-live="polite">
-                    <TrendingUp className="w-3 h-3 text-success" aria-hidden="true" />
-                    <span className="text-[10px] font-bold text-success uppercase">Scanner en direct actif</span>
-                  </div>
+                {activeTab !== "volume" && (
                   <GranularitySelector value={granularity} onChange={setGranularity} />
-                </div>
+                )}
               </div>
 
               <div className="p-6 bg-background/20 min-h-[480px]">
                 <TabsContent value="price" className="m-0 focus-visible:outline-none">
-                  {priceData.length > 0 ? <PriceChart data={priceData} forexRate={stats?.forexRate} fiat={fiat} /> : <EmptyState />}
+                  {priceData.length > 0 ? <PriceChart data={priceData} forexRate={stats?.forexRate} fiat={fiat} /> : loading ? <ChartLoader /> : <EmptyState />}
                 </TabsContent>
                 <TabsContent value="spread" className="m-0 focus-visible:outline-none">
-                  {spreadData.length > 0 ? <SpreadChart data={spreadData} fiat={fiat} /> : <EmptyState />}
+                  {spreadData.length > 0 ? <SpreadChart data={spreadData} fiat={fiat} /> : loading ? <ChartLoader /> : <EmptyState />}
                 </TabsContent>
                 <TabsContent value="volume" className="m-0 focus-visible:outline-none">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[440px]">
@@ -117,7 +117,7 @@ export default function DashboardPage() {
                   </div>
                 </TabsContent>
                 <TabsContent value="heatmap" className="m-0 focus-visible:outline-none">
-                  {heatmapData.length > 0 ? <HeatmapChart data={heatmapData} fiat={fiat} /> : <EmptyState />}
+                  {heatmapData.length > 0 ? <HeatmapChart data={heatmapData} fiat={fiat} granularity={granularity} /> : loading ? <ChartLoader /> : <EmptyState />}
                 </TabsContent>
               </div>
             </Tabs>
@@ -203,10 +203,11 @@ export default function DashboardPage() {
 }
 
 const GRANULARITIES = [
-  { value: "hour", label: "1H" },
-  { value: "12h", label: "12H" },
-  { value: "day", label: "1D" },
-  { value: "week", label: "1W" },
+  { value: "15min", label: "15m" },
+  { value: "1h", label: "1H" },
+  { value: "4h", label: "4H" },
+  { value: "1D", label: "1D" },
+  { value: "1W", label: "1W" },
 ];
 
 function GranularitySelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -236,6 +237,16 @@ function EmptyState() {
       <RefreshCw className="w-10 h-10 mb-4 opacity-5 animate-spin-slow" aria-hidden="true" />
       <p className="text-xs font-bold uppercase tracking-widest">Connectez le scanner</p>
       <p className="text-[10px] mt-1 text-center max-w-[200px]">Lancez un scan du marché pour alimenter le tableau de bord.</p>
+    </div>
+  );
+}
+
+function ChartLoader() {
+  return (
+    <div className="flex flex-col items-center justify-center h-[440px] text-muted-foreground border border-dashed border-border/40 rounded bg-muted/5" role="status" aria-live="polite">
+      <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-4" aria-hidden="true" />
+      <p className="text-xs font-bold uppercase tracking-widest">Chargement</p>
+      <span className="sr-only">Chargement des données du graphique</span>
     </div>
   );
 }

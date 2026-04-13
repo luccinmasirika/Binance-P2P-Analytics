@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { calculateSendFee, calculateReceiveFee } from "@/lib/constants/fees";
 
 export interface AdRow {
   id: number;
@@ -24,6 +24,23 @@ export interface AdRow {
   paymentMethods: { payType: string; name: string | null }[];
 }
 
+function effectivePrice(ad: AdRow): { net: number | null; delta: number | null } {
+  const price = Number(ad.price);
+  const minAmount = ad.minAmount ? Number(ad.minAmount) : 0;
+  if (!price || !minAmount) return { net: null, delta: null };
+  const payType = ad.paymentMethods[0]?.payType;
+  if (ad.tradeType === "BUY") {
+    // BUY-type ad = counterparty selling USDT, you SEND RWF and pay send fee.
+    const sendFee = calculateSendFee(payType, minAmount);
+    const net = price * (1 + sendFee / minAmount);
+    return { net, delta: net - price };
+  }
+  // SELL-type ad = counterparty buying USDT, you RECEIVE RWF and pay cash-out fee.
+  const receiveFee = calculateReceiveFee(payType, minAmount);
+  const net = price * (1 - receiveFee / minAmount);
+  return { net, delta: net - price };
+}
+
 export function AdsTable({ ads, fiat = "RWF" }: { ads: AdRow[]; fiat?: string }) {
   return (
     <div className="overflow-x-auto">
@@ -33,6 +50,7 @@ export function AdsTable({ ads, fiat = "RWF" }: { ads: AdRow[]; fiat?: string })
           <TableRow className="border-border hover:bg-transparent">
             <TableHead scope="col" className="w-[80px] text-[10px] font-bold text-muted-foreground uppercase tracking-widest h-9 border-b border-border/10">Type</TableHead>
             <TableHead scope="col" className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest h-9 border-b border-border/10">Prix ({fiat})</TableHead>
+            <TableHead scope="col" className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest h-9 border-b border-border/10">Net ({fiat})</TableHead>
             <TableHead scope="col" className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest h-9 border-b border-border/10">Quantité (USDT)</TableHead>
             <TableHead scope="col" className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest h-9 border-b border-border/10">Limites ({fiat})</TableHead>
             <TableHead scope="col" className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest h-9 border-b border-border/10">Annonceur</TableHead>
@@ -41,10 +59,12 @@ export function AdsTable({ ads, fiat = "RWF" }: { ads: AdRow[]; fiat?: string })
           </TableRow>
         </TableHeader>
         <TableBody>
-          {ads.map((ad) => (
+          {ads.map((ad) => {
+            const { net, delta } = effectivePrice(ad);
+            return (
             <TableRow key={ad.id} className="border-border hover:bg-muted/20 transition-colors group cursor-pointer">
               <TableCell className="py-2.5">
-                <div 
+                <div
                   className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded inline-block ${
                     ad.tradeType === "BUY" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"
                   }`}
@@ -57,6 +77,22 @@ export function AdsTable({ ads, fiat = "RWF" }: { ads: AdRow[]; fiat?: string })
                 <span className={ad.tradeType === "BUY" ? "text-success" : "text-destructive"} aria-label={`Prix : ${ad.price} ${fiat}`}>
                   {Number(ad.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
+              </TableCell>
+              <TableCell className="py-2.5 font-mono text-[11px] font-medium">
+                {net !== null ? (
+                  <div className="flex flex-col">
+                    <span className={ad.tradeType === "BUY" ? "text-success/70" : "text-destructive/70"}>
+                      {net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    {delta !== null && (
+                      <span className="text-[9px] text-muted-foreground/70">
+                        {delta > 0 ? "+" : ""}{delta.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
               </TableCell>
               <TableCell className="py-2.5 font-mono text-[11px] font-medium text-white/90">
                 {ad.tradableQuantity ? Number(ad.tradableQuantity).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}
@@ -96,10 +132,11 @@ export function AdsTable({ ads, fiat = "RWF" }: { ads: AdRow[]; fiat?: string })
                 {new Date(ad.scrapedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
           {ads.length === 0 && (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground py-20 bg-muted/5">
+              <TableCell colSpan={8} className="text-center text-muted-foreground py-20 bg-muted/5">
                 <div className="flex flex-col items-center gap-2 opacity-30" aria-live="polite">
                   <div className="w-8 h-8 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden="true" />
                   <span className="text-xs font-bold uppercase tracking-widest">Scanner actif... patientez</span>

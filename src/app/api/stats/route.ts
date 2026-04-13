@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   const period = params.get("period") || "24h";
   const fiat = params.get("fiat") || "RWF";
   const payType = params.get("payType") || undefined;
-  const granularity = params.get("granularity") || "hour";
+  const granularity = params.get("granularity") || "1h";
 
   switch (type) {
     case "current":
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     case "spread":
       return NextResponse.json(await getSpreadHistory(period, fiat, payType, granularity));
     case "heatmap":
-      return NextResponse.json(await getHeatmapData(fiat, payType));
+      return NextResponse.json(await getHeatmapData(fiat, payType, granularity));
     default:
       return NextResponse.json({ error: "Invalid type" }, { status: 400 });
   }
