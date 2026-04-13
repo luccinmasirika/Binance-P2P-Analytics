@@ -18,15 +18,33 @@ import type { AdItem } from "./types";
 export async function runFullScrape() {
   console.log(`[${new Date().toISOString()}] Starting full scrape...`);
 
-  // Get all active countries
-  const activeCountries = await db
+  // Get all active countries, seeding a default Rwanda row on first-ever run
+  let activeCountries = await db
     .select()
     .from(countries)
     .where(eq(countries.isActive, true));
 
   if (activeCountries.length === 0) {
-    console.log("  No active countries configured. Skipping scrape.");
-    return;
+    console.log("  No active countries configured. Seeding default (Rwanda)...");
+    await db
+      .insert(countries)
+      .values({
+        fiat: "RWF",
+        name: "Rwanda",
+        currencySymbol: "Fr",
+        isActive: true,
+      })
+      .onConflictDoNothing();
+
+    activeCountries = await db
+      .select()
+      .from(countries)
+      .where(eq(countries.isActive, true));
+
+    if (activeCountries.length === 0) {
+      console.log("  Seed failed. Skipping scrape.");
+      return;
+    }
   }
 
   // 1. Create session

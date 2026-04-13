@@ -66,12 +66,14 @@ pnpm tsx src/scripts/scrape.ts  # Run scraper manually
 - Free, no API key, updated daily
 - Used to compare P2P price premium vs official exchange rate
 
-### Data model (7 tables, snapshot-based)
+### Data model (9 tables, snapshot-based)
 
 Each scrape creates a `scrape_session`, then inserts ad snapshots forming a time series:
 
+- `countries` — supported fiat markets (fiat code, name, currency symbol, pay types, active flag)
 - `scrape_sessions` — tracks each scrape run (status, timing, ad count)
 - `advertisers` — unique traders, upserted on each scrape (user_no is unique key)
+- `advertiser_snapshots` — per-session metric history for each advertiser (month order count, finish rate, positive rate, online status) — time series of reputation
 - `ads` — one row per ad per session (price, amounts, trade type, timestamp)
 - `ad_payment_methods` — payment methods per ad (many-to-many)
 - `forex_rates` — USD/RWF official rate snapshots (source: frankfurter)
