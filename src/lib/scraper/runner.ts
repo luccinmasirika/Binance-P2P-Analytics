@@ -120,6 +120,9 @@ export async function runFullScrape() {
       })
       .where(eq(scrapeSessions.id, session.id));
 
+    // 7. Refresh materialized views (non-blocking: failures are logged, not thrown)
+    await refreshMatviews();
+
     console.log(`[${new Date().toISOString()}] Scrape completed: ${totalAds} ads`);
   } catch (err) {
     await db
@@ -129,6 +132,24 @@ export async function runFullScrape() {
 
     console.error(`[${new Date().toISOString()}] Scrape failed:`, err);
     throw err;
+  }
+}
+
+async function refreshMatviews() {
+  const views = ["mv_ads_hourly", "mv_ads_hourly_by_pay"] as const;
+  const results = await Promise.allSettled(
+    views.map(async (view) => {
+      const start = Date.now();
+      await db.execute(sql.raw(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`));
+      return { view, ms: Date.now() - start };
+    })
+  );
+  for (const [i, r] of results.entries()) {
+    if (r.status === "fulfilled") {
+      console.log(`  mv refresh: ${r.value.view} ${r.value.ms}ms`);
+    } else {
+      console.error(`  mv refresh failed: ${views[i]}:`, r.reason);
+    }
   }
 }
 

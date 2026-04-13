@@ -1,6 +1,6 @@
 import { db } from "../db/client";
-import { ads, adPaymentMethods, forexRates } from "../db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { forexRates } from "../db/schema";
+import { eq, desc, sql } from "drizzle-orm";
 
 function payTypeJoin(payType?: string) {
   if (!payType) return { join: sql``, where: sql`` };
@@ -59,39 +59,57 @@ export async function getCurrentStats(fiat: string = "RWF", payType?: string) {
   };
 }
 
-function granularityToBucket(granularity: string): { trunc: string; extra: string } {
+function pickMatview(payType?: string) {
+  if (payType) {
+    return {
+      name: sql.raw("mv_ads_hourly_by_pay"),
+      payFilter: sql`AND pay_type = ${payType}`,
+    };
+  }
+  return {
+    name: sql.raw("mv_ads_hourly"),
+    payFilter: sql``,
+  };
+}
+
+function bucketExprFromHour(granularity: string): string {
   switch (granularity) {
-    case "hour": return { trunc: "hour", extra: "" };
-    case "12h": return { trunc: "hour", extra: `- (EXTRACT(HOUR FROM ads.scraped_at)::int % 12) * INTERVAL '1 hour'` };
-    case "day": return { trunc: "day", extra: "" };
-    case "week": return { trunc: "week", extra: "" };
-    default: return { trunc: "hour", extra: "" };
+    case "hour":
+      return "hour_bucket";
+    case "12h":
+      return "hour_bucket - (EXTRACT(HOUR FROM hour_bucket)::int % 12) * INTERVAL '1 hour'";
+    case "day":
+      return "date_trunc('day', hour_bucket)";
+    case "week":
+      return "date_trunc('week', hour_bucket)";
+    default:
+      return "hour_bucket";
   }
 }
 
+function periodToInterval(period: string): string {
+  return period === "7d" ? "7 days" : period === "30d" ? "30 days" : "24 hours";
+}
+
 export async function getPriceHistory(period: string = "24h", fiat: string = "RWF", payType?: string, granularity: string = "hour") {
-  const interval = period === "7d" ? "7 days" : period === "30d" ? "30 days" : "24 hours";
-  const pm = payTypeJoin(payType);
-  const g = granularityToBucket(granularity);
-  const bucketExpr = g.extra
-    ? `date_trunc('${g.trunc}', ads.scraped_at) ${g.extra}`
-    : `date_trunc('${g.trunc}', ads.scraped_at)`;
+  const interval = periodToInterval(period);
+  const mv = pickMatview(payType);
+  const bucketExpr = bucketExprFromHour(granularity);
 
   const result = await db.execute(sql`
     SELECT
       ${sql.raw(bucketExpr)} AS time_bucket,
-      ads.trade_type AS trade_type,
-      MIN(CAST(ads.price AS numeric)) FILTER (WHERE ads.trade_type = 'BUY') AS best_buy,
-      MAX(CAST(ads.price AS numeric)) FILTER (WHERE ads.trade_type = 'SELL') AS best_sell,
-      AVG(CAST(ads.price AS numeric)) AS avg_price,
-      SUM(CAST(ads.tradable_quantity AS numeric)) AS total_volume,
-      COUNT(*)::int AS ad_count
-    FROM ads
-    ${pm.join}
-    WHERE ads.fiat = ${fiat}
-      AND ads.scraped_at > NOW() - INTERVAL '${sql.raw(interval)}'
-      ${pm.where}
-    GROUP BY time_bucket, ads.trade_type
+      trade_type,
+      MIN(min_price) FILTER (WHERE trade_type = 'BUY') AS best_buy,
+      MAX(max_price) FILTER (WHERE trade_type = 'SELL') AS best_sell,
+      SUM(sum_price) / NULLIF(SUM(ad_count), 0) AS avg_price,
+      SUM(total_volume) AS total_volume,
+      SUM(ad_count)::int AS ad_count
+    FROM ${mv.name}
+    WHERE fiat = ${fiat}
+      AND hour_bucket > NOW() - INTERVAL '${sql.raw(interval)}'
+      ${mv.payFilter}
+    GROUP BY time_bucket, trade_type
     ORDER BY time_bucket ASC
   `);
 
@@ -99,24 +117,20 @@ export async function getPriceHistory(period: string = "24h", fiat: string = "RW
 }
 
 export async function getSpreadHistory(period: string = "24h", fiat: string = "RWF", payType?: string, granularity: string = "hour") {
-  const interval = period === "7d" ? "7 days" : period === "30d" ? "30 days" : "24 hours";
-  const pm = payTypeJoin(payType);
-  const g = granularityToBucket(granularity);
-  const bucketExpr = g.extra
-    ? `date_trunc('${g.trunc}', ads.scraped_at) ${g.extra}`
-    : `date_trunc('${g.trunc}', ads.scraped_at)`;
+  const interval = periodToInterval(period);
+  const mv = pickMatview(payType);
+  const bucketExpr = bucketExprFromHour(granularity);
 
   const result = await db.execute(sql`
     WITH bucketed AS (
       SELECT
         ${sql.raw(bucketExpr)} AS time_bucket,
-        MIN(CAST(ads.price AS numeric)) FILTER (WHERE ads.trade_type = 'BUY') AS best_buy,
-        MAX(CAST(ads.price AS numeric)) FILTER (WHERE ads.trade_type = 'SELL') AS best_sell
-      FROM ads
-      ${pm.join}
-      WHERE ads.fiat = ${fiat}
-        AND ads.scraped_at > NOW() - INTERVAL '${sql.raw(interval)}'
-        ${pm.where}
+        MIN(min_price) FILTER (WHERE trade_type = 'BUY') AS best_buy,
+        MAX(max_price) FILTER (WHERE trade_type = 'SELL') AS best_sell
+      FROM ${mv.name}
+      WHERE fiat = ${fiat}
+        AND hour_bucket > NOW() - INTERVAL '${sql.raw(interval)}'
+        ${mv.payFilter}
       GROUP BY time_bucket
     )
     SELECT
@@ -133,25 +147,23 @@ export async function getSpreadHistory(period: string = "24h", fiat: string = "R
 }
 
 export async function getHeatmapData(fiat: string = "RWF", payType?: string) {
-  const pm = payTypeJoin(payType);
+  const mv = pickMatview(payType);
 
   const result = await db.execute(sql`
     WITH bucketed AS (
       SELECT
-        EXTRACT(DOW FROM ads.scraped_at) AS day_of_week,
-        EXTRACT(HOUR FROM ads.scraped_at) AS hour_of_day,
-        MIN(CAST(ads.price AS numeric)) FILTER (WHERE ads.trade_type = 'BUY') AS best_buy,
-        MAX(CAST(ads.price AS numeric)) FILTER (WHERE ads.trade_type = 'SELL') AS best_sell
-      FROM ads
-      ${pm.join}
-      WHERE ads.fiat = ${fiat}
-        AND ads.scraped_at > NOW() - INTERVAL '30 days'
-        ${pm.where}
-      GROUP BY day_of_week, hour_of_day, date_trunc('hour', ads.scraped_at)
+        hour_bucket,
+        MIN(min_price) FILTER (WHERE trade_type = 'BUY') AS best_buy,
+        MAX(max_price) FILTER (WHERE trade_type = 'SELL') AS best_sell
+      FROM ${mv.name}
+      WHERE fiat = ${fiat}
+        AND hour_bucket > NOW() - INTERVAL '30 days'
+        ${mv.payFilter}
+      GROUP BY hour_bucket
     )
     SELECT
-      day_of_week,
-      hour_of_day,
+      EXTRACT(DOW FROM hour_bucket) AS day_of_week,
+      EXTRACT(HOUR FROM hour_bucket) AS hour_of_day,
       AVG(best_sell - best_buy) AS avg_spread,
       COUNT(*) AS sample_count
     FROM bucketed
