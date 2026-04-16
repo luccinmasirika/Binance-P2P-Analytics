@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRecentAds, getLatestAds, getAdPaymentMethods, getDistinctPaymentMethods } from "@/lib/queries/ads";
+import { getActiveFiat } from "@/lib/fiat-cookie";
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
@@ -8,14 +9,14 @@ export async function GET(request: NextRequest) {
   const limit = params.get("limit") ? Number(params.get("limit")) : 50;
   const offset = params.get("offset") ? Number(params.get("offset")) : 0;
   const mode = params.get("mode"); // "latest" = last scrape session only
+  const fiat = params.get("fiat") || (await getActiveFiat());
 
   // If requesting payment methods list
   if (params.get("paymentMethods") === "true") {
-    const methods = await getDistinctPaymentMethods();
+    const methods = await getDistinctPaymentMethods(fiat);
     return NextResponse.json(methods);
   }
 
-  const fiat = params.get("fiat") || undefined;
   const payType = params.get("payType") || undefined;
 
   const adsData = mode === "latest"

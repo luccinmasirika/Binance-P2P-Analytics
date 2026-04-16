@@ -151,10 +151,26 @@ export async function getAdPaymentMethods(adIds: number[]) {
     .where(inArray(adPaymentMethods.adId, adIds));
 }
 
-export async function getDistinctPaymentMethods() {
-  const result = await db
-    .selectDistinct({ payType: adPaymentMethods.payType, payMethodName: adPaymentMethods.payMethodName })
-    .from(adPaymentMethods)
-    .orderBy(adPaymentMethods.payType);
-  return result;
+export async function getDistinctPaymentMethods(fiat?: string) {
+  if (!fiat) {
+    return db
+      .selectDistinct({
+        payType: adPaymentMethods.payType,
+        payMethodName: adPaymentMethods.payMethodName,
+      })
+      .from(adPaymentMethods)
+      .orderBy(adPaymentMethods.payType);
+  }
+
+  const result = await db.execute(sql`
+    SELECT DISTINCT apm.pay_type AS "payType", apm.pay_method_name AS "payMethodName"
+    FROM ad_payment_methods apm
+    INNER JOIN ads a ON a.id = apm.ad_id
+    WHERE a.fiat = ${fiat}
+    ORDER BY apm.pay_type
+  `);
+  return result.rows as Array<{
+    payType: string;
+    payMethodName: string | null;
+  }>;
 }

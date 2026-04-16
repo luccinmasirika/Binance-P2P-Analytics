@@ -43,7 +43,13 @@ export default function CountriesPage() {
   const [active, setActive] = useState<Country[]>([]);
   const [available, setAvailable] = useState<AvailableCountry[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [scrapeStatus, setScrapeStatus] = useState<{
+    fiat: string;
+    state: "pending" | "done" | "failed";
+  } | null>(null);
 
   const fetchCountries = async () => {
     try {
@@ -54,10 +60,13 @@ export default function CountriesPage() {
     } catch {
       setActive([]);
       setAvailable([]);
+    } finally {
+      setInitialLoading(false);
     }
   };
 
   useEffect(() => {
+    setMounted(true);
     fetchCountries();
   }, []);
 
@@ -70,6 +79,24 @@ export default function CountriesPage() {
     });
     await fetchCountries();
     setLoading(null);
+
+    // Fire an immediate scrape in the background so the first data points
+    // show up without waiting for the 10-min cron.
+    setScrapeStatus({ fiat, state: "pending" });
+    fetch("/api/scrape", { method: "POST" })
+      .then((res) => {
+        setScrapeStatus({ fiat, state: res.ok ? "done" : "failed" });
+      })
+      .catch(() => {
+        setScrapeStatus({ fiat, state: "failed" });
+      })
+      .finally(() => {
+        setTimeout(() => {
+          setScrapeStatus((current) =>
+            current && current.fiat === fiat ? null : current
+          );
+        }, 5000);
+      });
   };
 
   const toggleCountry = async (fiat: string, isActive: boolean) => {
@@ -114,8 +141,52 @@ export default function CountriesPage() {
         </p>
       </div>
 
+      {scrapeStatus && (
+        <div
+          className={`flex items-center gap-3 rounded-lg border px-4 py-2.5 text-xs font-medium ${
+            scrapeStatus.state === "pending"
+              ? "border-primary/40 bg-primary/5 text-primary"
+              : scrapeStatus.state === "done"
+              ? "border-success/40 bg-success/5 text-success"
+              : "border-destructive/40 bg-destructive/5 text-destructive"
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          {scrapeStatus.state === "pending" ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : scrapeStatus.state === "done" ? (
+            <CheckCircle2 className="w-3.5 h-3.5" />
+          ) : (
+            <AlertCircle className="w-3.5 h-3.5" />
+          )}
+          <span className="font-bold uppercase tracking-wider">
+            {scrapeStatus.fiat}
+          </span>
+          <span>
+            {scrapeStatus.state === "pending"
+              ? "Collecte des premières données en cours…"
+              : scrapeStatus.state === "done"
+              ? "Premier scrape terminé. Les données sont disponibles."
+              : "Le scrape a échoué. Le prochain cron réessaiera dans ≤10 min."}
+          </span>
+        </div>
+      )}
+
+      {!mounted || initialLoading ? (
+        <div
+          className="flex flex-col items-center justify-center py-24 text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" aria-hidden="true" />
+          <p className="text-[10px] font-bold uppercase tracking-widest">
+            Chargement des pays…
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Left: Active Countries List (Main area) */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between mb-2">
@@ -245,6 +316,7 @@ export default function CountriesPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>

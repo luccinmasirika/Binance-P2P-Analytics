@@ -16,6 +16,13 @@ import {
 } from "@/components/traders/period-selector";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   LineChart,
   Line,
   XAxis,
@@ -24,6 +31,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { useFiat } from "@/components/providers/fiat-provider";
 
 export default function TradersPage() {
   return (
@@ -36,34 +44,91 @@ export default function TradersPage() {
 function TradersContent() {
   const searchParams = useSearchParams();
   const selectedUserNo = searchParams.get("userNo");
+  const { fiat } = useFiat();
 
-  const [topTraders, setTopTraders] = useState([]);
-  const [marketMakers, setMarketMakers] = useState([]);
+  const [topTraders, setTopTraders] = useState<any[]>([]);
+  const [topLoading, setTopLoading] = useState(true);
+  const [marketMakers, setMarketMakers] = useState<any[]>([]);
+  const [marketMakersLoading, setMarketMakersLoading] = useState(true);
   const [traderProfile, setTraderProfile] = useState<any>(null);
+  const [traderProfileLoading, setTraderProfileLoading] = useState(false);
   const [traderPatterns, setTraderPatterns] = useState<any[]>([]);
   const [profitData, setProfitData] = useState<{
     period: PeriodPreset;
+    payType: string;
+    fiat: string;
     estimates: ProfitEstimate[];
   } | null>(null);
   const [profitPeriod, setProfitPeriod] = useState<PeriodPreset>("7d");
-  const profitLoading = profitData?.period !== profitPeriod;
+  const [profitPayType, setProfitPayType] = useState<string>("all");
+  const [paymentMethods, setPaymentMethods] = useState<
+    { payType: string; payMethodName: string | null }[]
+  >([]);
+  const profitLoading =
+    profitData?.period !== profitPeriod ||
+    profitData?.payType !== profitPayType ||
+    profitData?.fiat !== fiat;
   const profitEstimates = profitLoading ? [] : profitData!.estimates;
 
   useEffect(() => {
-    fetch("/api/traders?type=top&limit=30").then((r) => r.json()).then(setTopTraders);
-    fetch("/api/traders?type=marketMakers").then((r) => r.json()).then(setMarketMakers);
-  }, []);
+    const q = `fiat=${encodeURIComponent(fiat)}`;
+    setTopLoading(true);
+    fetch(`/api/traders?type=top&limit=30&${q}`)
+      .then((r) => r.json())
+      .then((data) => setTopTraders(Array.isArray(data) ? data : []))
+      .catch(() => setTopTraders([]))
+      .finally(() => setTopLoading(false));
+    setMarketMakersLoading(true);
+    fetch(`/api/traders?type=marketMakers&${q}`)
+      .then((r) => r.json())
+      .then((data) => setMarketMakers(Array.isArray(data) ? data : []))
+      .catch(() => setMarketMakers([]))
+      .finally(() => setMarketMakersLoading(false));
+    fetch(`/api/ads?paymentMethods=true&${q}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!Array.isArray(data)) return;
+        const seen = new Set<string>();
+        const uniq = data.filter((pm: { payType: string }) => {
+          if (seen.has(pm.payType)) return false;
+          seen.add(pm.payType);
+          return true;
+        });
+        setPaymentMethods(uniq);
+        if (
+          profitPayType !== "all" &&
+          !uniq.some((pm) => pm.payType === profitPayType)
+        ) {
+          setProfitPayType("all");
+        }
+      })
+      .catch(() => {});
+  }, [fiat]);
 
   useEffect(() => {
-    if (selectedUserNo) {
-      fetch(`/api/traders?type=profile&userNo=${selectedUserNo}`)
-        .then((r) => r.json())
-        .then(setTraderProfile);
-      fetch(`/api/traders?type=patterns&userNo=${selectedUserNo}`)
-        .then((r) => r.json())
-        .then(setTraderPatterns);
-    }
-  }, [selectedUserNo]);
+    if (!selectedUserNo) return;
+    const q = `fiat=${encodeURIComponent(fiat)}`;
+    setTraderProfileLoading(true);
+    setTraderProfile(null);
+    setTraderPatterns([]);
+    Promise.all([
+      fetch(`/api/traders?type=profile&userNo=${selectedUserNo}&${q}`).then(
+        (r) => r.json()
+      ),
+      fetch(`/api/traders?type=patterns&userNo=${selectedUserNo}&${q}`).then(
+        (r) => r.json()
+      ),
+    ])
+      .then(([profile, patterns]) => {
+        setTraderProfile(profile);
+        setTraderPatterns(Array.isArray(patterns) ? patterns : []);
+      })
+      .catch(() => {
+        setTraderProfile(null);
+        setTraderPatterns([]);
+      })
+      .finally(() => setTraderProfileLoading(false));
+  }, [selectedUserNo, fiat]);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,24 +137,60 @@ function TradersContent() {
       from: from.toISOString(),
       to: to.toISOString(),
       limit: "100",
+      fiat,
     });
+    if (profitPayType !== "all") params.set("payType", profitPayType);
     fetch(`/api/traders/profit?${params.toString()}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`profit api ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
-        if (!cancelled) {
-          setProfitData({
-            period: profitPeriod,
-            estimates: data.estimates ?? [],
-          });
-        }
+        if (cancelled) return;
+        setProfitData({
+          period: profitPeriod,
+          payType: profitPayType,
+          fiat,
+          estimates: data.estimates ?? [],
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setProfitData({
+          period: profitPeriod,
+          payType: profitPayType,
+          fiat,
+          estimates: [],
+        });
       });
     return () => {
       cancelled = true;
     };
-  }, [profitPeriod]);
+  }, [profitPeriod, profitPayType, fiat]);
 
-  if (selectedUserNo && traderProfile) {
-    return <TraderDetail profile={traderProfile} patterns={traderPatterns} />;
+  if (selectedUserNo) {
+    if (traderProfileLoading) {
+      return (
+        <div
+          className="flex flex-col items-center justify-center py-24 text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-4" aria-hidden="true" />
+          <p className="text-xs font-bold uppercase tracking-widest">
+            Chargement du trader
+          </p>
+        </div>
+      );
+    }
+    if (traderProfile) {
+      return <TraderDetail profile={traderProfile} patterns={traderPatterns} />;
+    }
+    return (
+      <div className="py-16 text-center text-muted-foreground text-sm">
+        Trader introuvable.
+      </div>
+    );
   }
 
   return (
@@ -109,7 +210,11 @@ function TradersContent() {
               <CardTitle>Top Traders (7 derniers jours)</CardTitle>
             </CardHeader>
             <CardContent>
-              <TraderTable traders={topTraders} />
+              {topLoading ? (
+                <TraderTableLoader label="Chargement des traders" />
+              ) : (
+                <TraderTable traders={topTraders} />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -120,7 +225,11 @@ function TradersContent() {
               <CardTitle>Market Makers (presence &gt; 80%)</CardTitle>
             </CardHeader>
             <CardContent>
-              <TraderTable traders={marketMakers} showPresence />
+              {marketMakersLoading ? (
+                <TraderTableLoader label="Chargement des market makers" />
+              ) : (
+                <TraderTable traders={marketMakers} showPresence />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -136,17 +245,42 @@ function TradersContent() {
                     entre snapshots, validée contre le delta monthOrderCount.
                   </p>
                 </div>
-                <PeriodSelector
-                  value={profitPeriod}
-                  onChange={setProfitPeriod}
-                />
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={profitPayType}
+                    onValueChange={(v) => v && setProfitPayType(v)}
+                  >
+                    <SelectTrigger
+                      className="min-w-[160px] w-auto h-8 text-[11px] font-bold bg-secondary/50 border-border hover:bg-secondary transition-colors focus:ring-1 focus:ring-primary cursor-pointer"
+                      aria-label="Filtrer par moyen de paiement"
+                    >
+                      <SelectValue placeholder="Paiement" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">
+                        Tous les paiements
+                      </SelectItem>
+                      {paymentMethods.map((pm) => (
+                        <SelectItem
+                          key={pm.payType}
+                          value={pm.payType}
+                          className="text-xs"
+                        >
+                          {pm.payMethodName || pm.payType}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <PeriodSelector
+                    value={profitPeriod}
+                    onChange={setProfitPeriod}
+                  />
+                </div>
               </div>
             </CardHeader>
             <CardContent>
               {profitLoading ? (
-                <div className="text-center text-muted-foreground py-8">
-                  Calcul en cours...
-                </div>
+                <TraderTableLoader label="Calcul des profits en cours" />
               ) : (
                 <ProfitTable estimates={profitEstimates} />
               )}
@@ -154,6 +288,19 @@ function TradersContent() {
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function TraderTableLoader({ label }: { label: string }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center py-12 text-muted-foreground"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="w-7 h-7 rounded-full border-2 border-primary border-t-transparent animate-spin mb-3" aria-hidden="true" />
+      <p className="text-[10px] font-bold uppercase tracking-widest">{label}</p>
     </div>
   );
 }

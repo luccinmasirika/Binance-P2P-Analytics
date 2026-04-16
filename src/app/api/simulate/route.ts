@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runSimulation, type SimulationParams } from "@/lib/queries/simulate";
+import { getActiveFiat } from "@/lib/fiat-cookie";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
 
   const params: SimulationParams = {
     capital: Number(body.capital),
+    fiat: typeof body.fiat === "string" && body.fiat
+      ? body.fiat
+      : await getActiveFiat(),
     paymentMethods: body.paymentMethods || [],
     hoursPerDay: Number(body.hoursPerDay),
     minutesPerTrade: Number(body.minutesPerTrade),

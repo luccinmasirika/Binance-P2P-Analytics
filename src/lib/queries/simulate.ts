@@ -1,10 +1,10 @@
 import { db } from "../db/client";
-import { ads, adPaymentMethods } from "../db/schema";
 import { sql } from "drizzle-orm";
 import { calculateFee } from "../constants/fees";
 
 export interface SimulationParams {
-  capital: number;           // RWF
+  capital: number;           // in fiat units
+  fiat: string;              // e.g. "RWF", "KES"
   paymentMethods: string[];  // e.g. ["MTNMobileMoney", "BankTransfer"]
   hoursPerDay: number;       // available trading hours
   minutesPerTrade: number;   // estimated time per buy-sell cycle
@@ -27,6 +27,7 @@ export interface SimulationResult {
 export async function runSimulation(params: SimulationParams): Promise<SimulationResult> {
   const {
     capital,
+    fiat,
     paymentMethods,
     hoursPerDay,
     minutesPerTrade,
@@ -48,7 +49,8 @@ export async function runSimulation(params: SimulationParams): Promise<Simulatio
         a.id, a.trade_type, a.price, a.scraped_at, apm.pay_type
       FROM ads a
       INNER JOIN ad_payment_methods apm ON apm.ad_id = a.id
-      WHERE a.scraped_at BETWEEN ${startDate}::timestamp AND ${endDate}::timestamp
+      WHERE a.fiat = ${fiat}
+        AND a.scraped_at BETWEEN ${startDate}::timestamp AND ${endDate}::timestamp
         AND CAST(a.min_amount AS numeric) <= ${capital}
         AND CAST(a.max_amount AS numeric) >= ${capital}
         ${payFilter}

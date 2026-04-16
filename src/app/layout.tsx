@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
-import Link from "next/link";
 import { ScrapeButton } from "@/components/nav/scrape-button";
 import { Sidebar } from "@/components/nav/sidebar";
+import { CountrySelector } from "@/components/nav/country-selector";
+import { FiatProvider } from "@/components/providers/fiat-provider";
+import { getActiveFiat } from "@/lib/fiat-cookie";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,6 +30,7 @@ export default async function RootLayout({
 }>) {
   const pathname = (await headers()).get("x-pathname") ?? "";
   const isAuthPage = pathname === "/login";
+  const initialFiat = isAuthPage ? "RWF" : await getActiveFiat();
 
   return (
     <html
@@ -44,7 +47,7 @@ export default async function RootLayout({
         {isAuthPage ? (
           children
         ) : (
-          <>
+          <FiatProvider initialFiat={initialFiat}>
             {/* Lien d'évitement pour l'accessibilité clavier */}
             <a
               href="#main-content"
@@ -84,9 +87,11 @@ export default async function RootLayout({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <CountrySelector />
+                  <div className="h-8 w-px bg-border mx-1" aria-hidden="true" />
                   <ScrapeButton />
-                  <div className="h-8 w-px bg-border mx-2" aria-hidden="true" />
+                  <div className="h-8 w-px bg-border mx-1" aria-hidden="true" />
                   <form action="/api/logout" method="POST">
                     <button
                       type="submit"
@@ -107,7 +112,7 @@ export default async function RootLayout({
                 </main>
               </div>
             </div>
-          </>
+          </FiatProvider>
         )}
       </body>
     </html>

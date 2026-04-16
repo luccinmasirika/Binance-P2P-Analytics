@@ -2,8 +2,9 @@ import { db } from "../db/client";
 import { marketDepthSnapshots } from "../db/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 
-export async function getLatestDepth(tradeType?: "BUY" | "SELL") {
+export async function getLatestDepth(fiat: string, tradeType?: "BUY" | "SELL") {
   const conditions = [
+    eq(marketDepthSnapshots.fiat, fiat),
     isNull(marketDepthSnapshots.payType),
     sql`${marketDepthSnapshots.sessionId} = (
       SELECT MAX(id) FROM scrape_sessions WHERE status = 'completed'
@@ -21,7 +22,7 @@ export async function getLatestDepth(tradeType?: "BUY" | "SELL") {
     .orderBy(marketDepthSnapshots.priceLevel);
 }
 
-export async function getDepthByPaymentMethod() {
+export async function getDepthByPaymentMethod(fiat: string) {
   const result = await db.execute(sql`
     SELECT
       trade_type,
@@ -29,7 +30,8 @@ export async function getDepthByPaymentMethod() {
       SUM(CAST(total_quantity AS numeric)) AS total_volume,
       SUM(ad_count) AS total_ads
     FROM market_depth_snapshots
-    WHERE session_id = (
+    WHERE fiat = ${fiat}
+      AND session_id = (
         SELECT MAX(id) FROM scrape_sessions WHERE status = 'completed'
       )
       AND pay_type IS NOT NULL
@@ -40,14 +42,18 @@ export async function getDepthByPaymentMethod() {
   return result.rows;
 }
 
-export async function getDepthComparison(period: "24h" | "7d" = "24h") {
+export async function getDepthComparison(
+  fiat: string,
+  period: "24h" | "7d" = "24h"
+) {
   const interval = period === "7d" ? "7 days" : "24 hours";
 
   const result = await db.execute(sql`
     WITH current AS (
       SELECT trade_type, SUM(CAST(total_quantity AS numeric)) AS volume
       FROM market_depth_snapshots
-      WHERE session_id = (
+      WHERE fiat = ${fiat}
+        AND session_id = (
           SELECT MAX(id) FROM scrape_sessions WHERE status = 'completed'
         )
         AND pay_type IS NULL
@@ -58,7 +64,8 @@ export async function getDepthComparison(period: "24h" | "7d" = "24h") {
         SELECT trade_type, date_trunc('hour', scraped_at) AS bucket,
           SUM(CAST(total_quantity AS numeric)) AS vol
         FROM market_depth_snapshots
-        WHERE scraped_at BETWEEN NOW() - INTERVAL '${sql.raw(interval)}' - INTERVAL '1 hour'
+        WHERE fiat = ${fiat}
+          AND scraped_at BETWEEN NOW() - INTERVAL '${sql.raw(interval)}' - INTERVAL '1 hour'
           AND NOW() - INTERVAL '${sql.raw(interval)}'
           AND pay_type IS NULL
         GROUP BY trade_type, bucket

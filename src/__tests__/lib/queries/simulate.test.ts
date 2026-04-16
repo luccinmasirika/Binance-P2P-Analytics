@@ -10,6 +10,7 @@ import { runSimulation, type SimulationParams } from "@/lib/queries/simulate";
 
 const baseParams: SimulationParams = {
   capital: 100000,
+  fiat: "RWF",
   paymentMethods: ["MTNMobileMoney"],
   hoursPerDay: 4,
   minutesPerTrade: 20,

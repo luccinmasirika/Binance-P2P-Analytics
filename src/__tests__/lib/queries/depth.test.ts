@@ -21,34 +21,34 @@ beforeEach(() => {
 
 describe("getLatestDepth", () => {
   it("returns depth without tradeType filter", async () => {
-    const result = await getLatestDepth();
+    const result = await getLatestDepth("RWF");
     expect(result).toEqual([]);
   });
 
   it("returns depth filtered by BUY", async () => {
-    await getLatestDepth("BUY");
+    await getLatestDepth("RWF", "BUY");
   });
 
   it("returns depth filtered by SELL", async () => {
-    await getLatestDepth("SELL");
+    await getLatestDepth("RWF", "SELL");
   });
 });
 
 describe("getDepthByPaymentMethod", () => {
   it("returns depth grouped by payment method", async () => {
-    const result = await getDepthByPaymentMethod();
+    const result = await getDepthByPaymentMethod("RWF");
     expect(result).toEqual([]);
   });
 });
 
 describe("getDepthComparison", () => {
   it("returns comparison for 24h period (default)", async () => {
-    const result = await getDepthComparison();
+    const result = await getDepthComparison("RWF");
     expect(result).toEqual([]);
   });
 
   it("returns comparison for 7d period", async () => {
-    const result = await getDepthComparison("7d");
+    const result = await getDepthComparison("RWF", "7d");
     expect(result).toEqual([]);
   });
 });

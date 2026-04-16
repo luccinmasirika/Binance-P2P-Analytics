@@ -1,6 +1,6 @@
 import { db } from "../db/client";
 import { sql } from "drizzle-orm";
-import { calculateFee } from "../constants/fees";
+import { calculateSendFee, calculateReceiveFee } from "../constants/fees";
 
 // ──────────────────────────────────────────────
 // Types
@@ -68,9 +68,17 @@ interface OrderCountDeltaRow {
 export async function inferFillsForTrader(
   userNo: string,
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  fiat: string,
+  payType: string | null = null
 ): Promise<FillInference[]> {
-  const rows = await runDecayFillsQuery(startDate, endDate, userNo);
+  const rows = await runDecayFillsQuery(
+    startDate,
+    endDate,
+    fiat,
+    userNo,
+    payType
+  );
 
   return rows.map((r) => ({
     advNo: r.adv_no,
@@ -91,10 +99,20 @@ export async function inferFillsForTrader(
 async function runDecayFillsQuery(
   startDate: Date,
   endDate: Date,
-  userNo: string | null
+  fiat: string,
+  userNo: string | null,
+  payType: string | null = null
 ): Promise<DecayFillRow[]> {
   const result = await db.execute(sql`
-    WITH ordered_ads AS (
+    WITH ad_primary_pay AS (
+      SELECT DISTINCT ON (ad_id)
+        ad_id,
+        pay_type
+      FROM ad_payment_methods
+      WHERE (${payType}::text IS NULL OR pay_type = ${payType})
+      ORDER BY ad_id, id
+    ),
+    ordered_ads AS (
       SELECT
         adv.user_no,
         adv.nickname,
@@ -114,8 +132,16 @@ async function runDecayFillsQuery(
           OVER (PARTITION BY a.adv_no ORDER BY a.scraped_at) AS next_price
       FROM ads a
       INNER JOIN advertisers adv ON adv.id = a.advertiser_id
-      WHERE a.scraped_at BETWEEN ${startDate} AND ${endDate}
+      WHERE a.fiat = ${fiat}
+        AND a.scraped_at BETWEEN ${startDate} AND ${endDate}
         AND (${userNo}::text IS NULL OR adv.user_no = ${userNo})
+        AND (
+          ${payType}::text IS NULL
+          OR EXISTS (
+            SELECT 1 FROM ad_primary_pay p
+            WHERE p.ad_id = a.id
+          )
+        )
     ),
     decay_fills AS (
       SELECT
@@ -141,13 +167,9 @@ async function runDecayFillsQuery(
       f.filled_qty::text AS filled_qty,
       f.price::text AS price,
       f.scraped_at,
-      (
-        SELECT apm.pay_type
-        FROM ad_payment_methods apm
-        WHERE apm.ad_id = f.ad_id
-        LIMIT 1
-      ) AS primary_pay_type
+      p.pay_type AS primary_pay_type
     FROM decay_fills f
+    LEFT JOIN ad_primary_pay p ON p.ad_id = f.ad_id
     ORDER BY f.user_no, f.scraped_at ASC
   `);
 
@@ -229,18 +251,28 @@ function aggregateTrader(input: AggregateInput): TraderProfitEstimate {
     const price = Number(row.price);
     const value = qty * price;
 
-    // estimate fee for this fill leg using primary pay type
-    const fee = row.primary_pay_type
-      ? calculateFee(row.primary_pay_type, value)
-      : 0;
+    // trade_type reflects the USER perspective (the Binance P2P tab the ad
+    // appears in), not the merchant perspective. See src/lib/queries/stats.ts
+    // for the canonical sematics:
+    //   - BUY ad  = user can buy USDT = merchant SOLD USDT, received RWF
+    //   - SELL ad = user can sell USDT = merchant BOUGHT USDT, sent RWF
+    // Fees follow that same direction: a sell leg pays cash-out on receipt,
+    // a buy leg pays a send fee when wiring RWF out.
+    let fee = 0;
+    if (row.primary_pay_type) {
+      fee =
+        row.trade_type === "BUY"
+          ? calculateReceiveFee(row.primary_pay_type, value)
+          : calculateSendFee(row.primary_pay_type, value);
+    }
     weightedFeeRwf += fee;
 
     if (row.trade_type === "BUY") {
-      usdtBought += qty;
-      rwfSpentBuying += value;
-    } else {
       usdtSold += qty;
       rwfReceivedSelling += value;
+    } else {
+      usdtBought += qty;
+      rwfSpentBuying += value;
     }
     inferredOrdersCount += 1;
   }
@@ -266,6 +298,13 @@ function aggregateTrader(input: AggregateInput): TraderProfitEstimate {
   } else if (inferredOrdersCount > 0) {
     // No orderCount validation possible — fall back to medium if we have signal
     confidence = "medium";
+  }
+
+  // One-sided traders: we only see one leg of their cycles, so the spread
+  // profit cannot be estimated. Mark as low confidence so the UI signals that
+  // the net number is incomplete, not an actual loss.
+  if (usdtBought === 0 || usdtSold === 0) {
+    confidence = "low";
   }
 
   return {
@@ -298,9 +337,17 @@ function aggregateTrader(input: AggregateInput): TraderProfitEstimate {
 export async function estimateTraderProfit(
   userNo: string,
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  fiat: string,
+  payType: string | null = null
 ): Promise<TraderProfitEstimate | null> {
-  const rows = await runDecayFillsQuery(startDate, endDate, userNo);
+  const rows = await runDecayFillsQuery(
+    startDate,
+    endDate,
+    fiat,
+    userNo,
+    payType
+  );
   if (rows.length === 0) return null;
 
   const deltas = await getOrderCountDeltas(startDate, endDate, userNo);
@@ -323,9 +370,17 @@ export async function estimateTraderProfit(
 export async function estimateAllTradersProfit(
   startDate: Date,
   endDate: Date,
-  limit: number = 50
+  fiat: string,
+  limit: number = 50,
+  payType: string | null = null
 ): Promise<TraderProfitEstimate[]> {
-  const rows = await runDecayFillsQuery(startDate, endDate, null);
+  const rows = await runDecayFillsQuery(
+    startDate,
+    endDate,
+    fiat,
+    null,
+    payType
+  );
   if (rows.length === 0) return [];
 
   const deltas = await getOrderCountDeltas(startDate, endDate, null);

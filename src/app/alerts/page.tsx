@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
+import { useFiat } from "@/components/providers/fiat-provider";
 
 interface Alert {
   id: number;
@@ -36,8 +37,12 @@ interface Alert {
 }
 
 export default function AlertsPage() {
+  const { fiat } = useFiat();
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [alertsLoading, setAlertsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [busyAlertId, setBusyAlertId] = useState<number | null>(null);
 
   // Form state
   const [name, setName] = useState("");
@@ -47,8 +52,16 @@ export default function AlertsPage() {
   const [cooldown, setCooldown] = useState(30);
 
   const fetchAlerts = async () => {
-    const res = await fetch("/api/alerts");
-    setAlerts(await res.json());
+    setAlertsLoading(true);
+    try {
+      const res = await fetch("/api/alerts");
+      const data = await res.json();
+      setAlerts(Array.isArray(data) ? data : []);
+    } catch {
+      setAlerts([]);
+    } finally {
+      setAlertsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -57,39 +70,54 @@ export default function AlertsPage() {
 
   const createAlert = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch("/api/alerts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        telegramChatId: chatId,
-        conditionType,
-        threshold: Number(threshold),
-        cooldownMinutes: cooldown,
-      }),
-    });
-    setName("");
-    setThreshold("");
-    setShowForm(false);
-    fetchAlerts();
+    setSubmitting(true);
+    try {
+      await fetch("/api/alerts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          telegramChatId: chatId,
+          conditionType,
+          threshold: Number(threshold),
+          cooldownMinutes: cooldown,
+        }),
+      });
+      setName("");
+      setThreshold("");
+      setShowForm(false);
+      await fetchAlerts();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const toggleAlert = async (alert: Alert) => {
-    await fetch("/api/alerts", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: alert.id, isActive: !alert.isActive }),
-    });
-    fetchAlerts();
+    setBusyAlertId(alert.id);
+    try {
+      await fetch("/api/alerts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: alert.id, isActive: !alert.isActive }),
+      });
+      await fetchAlerts();
+    } finally {
+      setBusyAlertId(null);
+    }
   };
 
   const deleteAlert = async (id: number) => {
-    await fetch("/api/alerts", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    fetchAlerts();
+    setBusyAlertId(id);
+    try {
+      await fetch("/api/alerts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      await fetchAlerts();
+    } finally {
+      setBusyAlertId(null);
+    }
   };
 
   const conditionLabel = (type: string) => {
@@ -153,7 +181,7 @@ export default function AlertsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Seuil (RWF)</label>
+                  <label className="text-sm font-medium">Seuil ({fiat})</label>
                   <Input
                     type="number"
                     value={threshold}
@@ -172,7 +200,9 @@ export default function AlertsPage() {
                 </div>
               </div>
 
-              <Button type="submit">Creer</Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Création en cours…" : "Creer"}
+              </Button>
             </form>
           </CardContent>
         </Card>
@@ -196,48 +226,77 @@ export default function AlertsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {alerts.map((alert) => (
-                <TableRow key={alert.id}>
-                  <TableCell className="font-medium">{alert.name}</TableCell>
-                  <TableCell>{conditionLabel(alert.conditionType)}</TableCell>
-                  <TableCell className="font-mono">{alert.threshold} RWF</TableCell>
-                  <TableCell>{alert.cooldownMinutes} min</TableCell>
-                  <TableCell>
-                    <Badge variant={alert.isActive ? "default" : "outline"}>
-                      {alert.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {alert.lastTriggeredAt
-                      ? new Date(alert.lastTriggeredAt).toLocaleString("fr-RW")
-                      : "Jamais"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => toggleAlert(alert)}
-                      >
-                        {alert.isActive ? "Desactiver" : "Activer"}
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => deleteAlert(alert.id)}
-                      >
-                        Supprimer
-                      </Button>
+              {alertsLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-10">
+                    <div
+                      className="flex items-center justify-center gap-3 text-muted-foreground text-xs"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <div
+                        className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin"
+                        aria-hidden="true"
+                      />
+                      Chargement des alertes…
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
-              {alerts.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                    Aucune alerte configuree.
-                  </TableCell>
-                </TableRow>
+              ) : (
+                <>
+                  {alerts.map((alert) => {
+                    const busy = busyAlertId === alert.id;
+                    return (
+                      <TableRow key={alert.id} className={busy ? "opacity-60" : undefined}>
+                        <TableCell className="font-medium">{alert.name}</TableCell>
+                        <TableCell>{conditionLabel(alert.conditionType)}</TableCell>
+                        <TableCell className="font-mono">{alert.threshold} {fiat}</TableCell>
+                        <TableCell>{alert.cooldownMinutes} min</TableCell>
+                        <TableCell>
+                          <Badge variant={alert.isActive ? "default" : "outline"}>
+                            {alert.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {alert.lastTriggeredAt
+                            ? new Date(alert.lastTriggeredAt).toLocaleString("fr-RW")
+                            : "Jamais"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => toggleAlert(alert)}
+                            >
+                              {busy
+                                ? "…"
+                                : alert.isActive
+                                ? "Desactiver"
+                                : "Activer"}
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => deleteAlert(alert.id)}
+                            >
+                              {busy ? "…" : "Supprimer"}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {alerts.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        Aucune alerte configuree.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
               )}
             </TableBody>
           </Table>

@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { ProfileForm } from "@/components/simulator/profile-form";
 import { SimulationResults } from "@/components/simulator/results";
+import { useFiat } from "@/components/providers/fiat-provider";
 
 export default function SimulatorPage() {
+  const { fiat } = useFiat();
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +20,7 @@ export default function SimulatorPage() {
       const res = await fetch("/api/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(params),
+        body: JSON.stringify({ ...params, fiat }),
       });
 
       if (!res.ok) {

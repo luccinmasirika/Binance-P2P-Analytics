@@ -5,6 +5,7 @@ import {
   estimateTraderProfit,
   inferFillsForTrader,
 } from "@/lib/queries/trader-profit";
+import { getActiveFiat } from "@/lib/fiat-cookie";
 
 const QuerySchema = z.object({
   userNo: z.string().optional(),
@@ -12,6 +13,8 @@ const QuerySchema = z.object({
   to: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
   withFills: z.enum(["true", "false"]).optional(),
+  payType: z.string().optional(),
+  fiat: z.string().optional(),
 });
 
 function defaultRange(): { from: Date; to: Date } {
@@ -32,10 +35,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { userNo, from, to, limit, withFills } = parsed.data;
+  const { userNo, from, to, limit, withFills, payType, fiat: fiatParam } =
+    parsed.data;
+  const fiat = fiatParam ?? (await getActiveFiat());
   const fallback = defaultRange();
   const startDate = from ? new Date(from) : fallback.from;
   const endDate = to ? new Date(to) : fallback.to;
+  const payTypeFilter = payType && payType !== "all" ? payType : null;
 
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
     return NextResponse.json(
@@ -45,13 +51,25 @@ export async function GET(request: NextRequest) {
   }
 
   if (userNo) {
-    const estimate = await estimateTraderProfit(userNo, startDate, endDate);
+    const estimate = await estimateTraderProfit(
+      userNo,
+      startDate,
+      endDate,
+      fiat,
+      payTypeFilter
+    );
     if (!estimate) {
       return NextResponse.json({ estimate: null, fills: [] });
     }
     const fills =
       withFills === "true"
-        ? await inferFillsForTrader(userNo, startDate, endDate)
+        ? await inferFillsForTrader(
+            userNo,
+            startDate,
+            endDate,
+            fiat,
+            payTypeFilter
+          )
         : undefined;
     return NextResponse.json({ estimate, fills });
   }
@@ -59,7 +77,9 @@ export async function GET(request: NextRequest) {
   const estimates = await estimateAllTradersProfit(
     startDate,
     endDate,
-    limit ?? 50
+    fiat,
+    limit ?? 50,
+    payTypeFilter
   );
   return NextResponse.json({ estimates });
 }

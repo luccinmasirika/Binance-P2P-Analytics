@@ -11,9 +11,10 @@ import { VolumeChart } from "@/components/charts/volume-chart";
 import { DepthChart } from "@/components/charts/depth-chart";
 import { HeatmapChart } from "@/components/charts/heatmap-chart";
 import { RefreshCw } from "lucide-react";
+import { useFiat } from "@/components/providers/fiat-provider";
 
 export default function DashboardPage() {
-  const [fiat, setFiat] = useState("RWF");
+  const { fiat } = useFiat();
   const [tradeType, setTradeType] = useState("BUY");
   const [period, setPeriod] = useState("24h");
   const [payType, setPayType] = useState("all");
@@ -72,7 +73,11 @@ export default function DashboardPage() {
       
       {/* Ticker Section - Live Prices */}
       <div className="mb-4">
-        {stats && <StatsCards stats={stats} fiat={fiat} />}
+        {stats ? (
+          <StatsCards stats={stats} fiat={fiat} />
+        ) : (
+          <StatsCardsSkeleton />
+        )}
       </div>
 
       {!isMounted ? (
@@ -168,13 +173,11 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex items-center gap-4">
-                <Filters 
-                  fiat={fiat} 
-                  onFiatChange={setFiat} 
-                  period={period} 
-                  onPeriodChange={setPeriod} 
-                  payType={payType} 
-                  onPayTypeChange={setPayType} 
+                <Filters
+                  period={period}
+                  onPeriodChange={setPeriod}
+                  payType={payType}
+                  onPayTypeChange={setPayType}
                 />
               </div>
             </div>
@@ -187,12 +190,25 @@ export default function DashboardPage() {
                   <h2 id="orderbook-title" className="text-[11px] font-bold text-white uppercase tracking-widest">Carnet d'ordres en direct</h2>
                 </div>
                 <div className="text-[10px] font-medium text-muted-foreground italic" suppressHydrationWarning aria-live="polite">
-                  {recentAds.length > 0 && recentAds[0].scrapedAt
+                  {loading && recentAds.length === 0
+                    ? "Chargement…"
+                    : recentAds.length > 0 && recentAds[0].scrapedAt
                     ? `Dernier scan : ${new Date(recentAds[0].scrapedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · ${recentAds.length} annonces`
                     : `${recentAds.length} annonces affichées`}
                 </div>
               </div>
-              <AdsTable ads={recentAds} fiat={fiat} />
+              {loading && recentAds.length === 0 ? (
+                <div
+                  className="flex items-center justify-center py-10"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-hidden="true" />
+                  <span className="sr-only">Chargement du carnet d&apos;ordres</span>
+                </div>
+              ) : (
+                <AdsTable ads={recentAds} fiat={fiat} />
+              )}
             </section>
           </div>
         </div>
@@ -247,6 +263,29 @@ function ChartLoader() {
       <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-4" aria-hidden="true" />
       <p className="text-xs font-bold uppercase tracking-widest">Chargement</p>
       <span className="sr-only">Chargement des données du graphique</span>
+    </div>
+  );
+}
+
+function StatsCardsSkeleton() {
+  return (
+    <div
+      className="grid grid-cols-2 md:grid-cols-4 gap-3"
+      role="status"
+      aria-label="Chargement des statistiques"
+    >
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div
+          key={i}
+          className="bg-card border border-border rounded p-4 animate-pulse"
+          aria-hidden="true"
+        >
+          <div className="h-3 w-20 bg-muted/40 rounded mb-3" />
+          <div className="h-6 w-28 bg-muted/60 rounded mb-2" />
+          <div className="h-2.5 w-16 bg-muted/30 rounded" />
+        </div>
+      ))}
+      <span className="sr-only">Chargement des statistiques</span>
     </div>
   );
 }

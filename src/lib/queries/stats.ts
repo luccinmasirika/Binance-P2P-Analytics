@@ -29,20 +29,21 @@ export async function getCurrentStats(fiat: string = "RWF", payType?: string) {
       a.price::numeric AS price,
       a.min_amount::numeric AS min_amount,
       a.tradable_quantity::numeric AS tradable_quantity,
-      (
-        SELECT apm.pay_type
-        FROM ad_payment_methods apm
-        WHERE apm.ad_id = a.id
-          ${payType ? sql`AND apm.pay_type = ${payType}` : sql``}
-        ORDER BY apm.id ASC
-        LIMIT 1
-      ) AS primary_pay_type
+      p.pay_type AS primary_pay_type
     FROM ads a
+    LEFT JOIN LATERAL (
+      SELECT apm.pay_type
+      FROM ad_payment_methods apm
+      WHERE apm.ad_id = a.id
+        ${payType ? sql`AND apm.pay_type = ${payType}` : sql``}
+      ORDER BY apm.id ASC
+      LIMIT 1
+    ) p ON true
     WHERE a.fiat = ${fiat}
       AND a.session_id = (
         SELECT MAX(id) FROM scrape_sessions WHERE status = 'completed'
       )
-      ${payType ? sql`AND EXISTS (SELECT 1 FROM ad_payment_methods x WHERE x.ad_id = a.id AND x.pay_type = ${payType})` : sql``}
+      ${payType ? sql`AND p.pay_type IS NOT NULL` : sql``}
   `);
 
   const ads = adsResult.rows as unknown as LatestAdRow[];

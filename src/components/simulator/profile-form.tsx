@@ -1,16 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useFiat } from "@/components/providers/fiat-provider";
 
-const PAYMENT_METHODS = [
-  { id: "MTNMobileMoney", label: "MTN Mobile Money" },
-  { id: "AirtelMoney", label: "Airtel Money" },
-  { id: "BankTransfer", label: "Bank Transfer" },
-];
+interface PaymentMethodOption {
+  id: string;
+  label: string;
+}
 
 interface ProfileFormProps {
   onSubmit: (params: {
@@ -26,13 +26,45 @@ interface ProfileFormProps {
 }
 
 export function ProfileForm({ onSubmit, loading }: ProfileFormProps) {
+  const { fiat } = useFiat();
   const [capital, setCapital] = useState(100000);
-  const [paymentMethods, setPaymentMethods] = useState<string[]>(["MTNMobileMoney"]);
+  const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
+  const [availableMethods, setAvailableMethods] = useState<PaymentMethodOption[]>([]);
+  const [methodsLoading, setMethodsLoading] = useState(true);
   const [hoursPerDay, setHoursPerDay] = useState(4);
   const [minutesPerTrade, setMinutesPerTrade] = useState(20);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [priceStrategy, setPriceStrategy] = useState<1 | 2 | 3>(2);
+
+  useEffect(() => {
+    setMethodsLoading(true);
+    fetch(`/api/ads?paymentMethods=true&fiat=${encodeURIComponent(fiat)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!Array.isArray(data)) return;
+        const seen = new Set<string>();
+        const options: PaymentMethodOption[] = data
+          .filter((pm: { payType: string }) => {
+            if (seen.has(pm.payType)) return false;
+            seen.add(pm.payType);
+            return true;
+          })
+          .map((pm: { payType: string; payMethodName: string | null }) => ({
+            id: pm.payType,
+            label: pm.payMethodName || pm.payType,
+          }));
+        setAvailableMethods(options);
+        setPaymentMethods((prev) => {
+          const validIds = new Set(options.map((o) => o.id));
+          const retained = prev.filter((id) => validIds.has(id));
+          if (retained.length > 0) return retained;
+          return options.length > 0 ? [options[0].id] : [];
+        });
+      })
+      .catch(() => {})
+      .finally(() => setMethodsLoading(false));
+  }, [fiat]);
 
   const togglePayMethod = (id: string) => {
     setPaymentMethods((prev) =>
@@ -62,7 +94,7 @@ export function ProfileForm({ onSubmit, loading }: ProfileFormProps) {
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Capital */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Capital initial (RWF)</label>
+            <label className="text-sm font-medium">Capital initial ({fiat})</label>
             <Input
               type="number"
               value={capital}
@@ -71,7 +103,7 @@ export function ProfileForm({ onSubmit, loading }: ProfileFormProps) {
               step={10000}
             />
             <p className="text-xs text-muted-foreground">
-              {capital.toLocaleString("fr-RW")} RWF
+              {capital.toLocaleString("fr-FR")} {fiat}
             </p>
           </div>
 
@@ -79,18 +111,37 @@ export function ProfileForm({ onSubmit, loading }: ProfileFormProps) {
           <div className="space-y-2">
             <label className="text-sm font-medium">Moyens de paiement</label>
             <div className="flex flex-col gap-2">
-              {PAYMENT_METHODS.map((pm) => (
-                <div key={pm.id} className="flex items-center gap-2">
-                  <Checkbox
-                    id={pm.id}
-                    checked={paymentMethods.includes(pm.id)}
-                    onCheckedChange={() => togglePayMethod(pm.id)}
+              {methodsLoading ? (
+                <div
+                  className="flex items-center gap-2 text-xs text-muted-foreground py-1"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div
+                    className="w-3.5 h-3.5 rounded-full border border-primary border-t-transparent animate-spin"
+                    aria-hidden="true"
                   />
-                  <label htmlFor={pm.id} className="text-sm">
-                    {pm.label}
-                  </label>
+                  Chargement des moyens de paiement…
                 </div>
-              ))}
+              ) : availableMethods.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  Aucun moyen de paiement pour {fiat}. Lancez un scrape pour en
+                  remonter.
+                </p>
+              ) : (
+                availableMethods.map((pm) => (
+                  <div key={pm.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={pm.id}
+                      checked={paymentMethods.includes(pm.id)}
+                      onCheckedChange={() => togglePayMethod(pm.id)}
+                    />
+                    <label htmlFor={pm.id} className="text-sm">
+                      {pm.label}
+                    </label>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 

@@ -30,18 +30,18 @@ beforeEach(async () => {
 
 describe("getTopTraders", () => {
   it("returns top traders with default limit", async () => {
-    const result = await getTopTraders();
+    const result = await getTopTraders("RWF");
     expect(result).toEqual([]);
   });
 
   it("accepts custom limit", async () => {
-    await getTopTraders(5);
+    await getTopTraders("RWF", 5);
   });
 });
 
 describe("getTraderProfile", () => {
   it("returns null when trader not found", async () => {
-    const result = await getTraderProfile("nonexistent");
+    const result = await getTraderProfile("nonexistent", "RWF");
     expect(result).toBeNull();
   });
 
@@ -56,7 +56,7 @@ describe("getTraderProfile", () => {
     } as any);
     vi.mocked(db.execute).mockResolvedValue({ rows: [] } as any);
 
-    const result = await getTraderProfile("u1");
+    const result = await getTraderProfile("u1", "RWF");
     expect(result).toHaveProperty("trader");
     expect(result).toHaveProperty("adHistory");
   });
@@ -64,7 +64,7 @@ describe("getTraderProfile", () => {
 
 describe("getTraderHourlyPatterns", () => {
   it("returns null when trader not found", async () => {
-    const result = await getTraderHourlyPatterns("nonexistent");
+    const result = await getTraderHourlyPatterns("nonexistent", "RWF");
     expect(result).toBeNull();
   });
 
@@ -79,14 +79,14 @@ describe("getTraderHourlyPatterns", () => {
     } as any);
     vi.mocked(db.execute).mockResolvedValue({ rows: [{ hour_of_day: 10 }] } as any);
 
-    const result = await getTraderHourlyPatterns("u1");
+    const result = await getTraderHourlyPatterns("u1", "RWF");
     expect(result).toEqual([{ hour_of_day: 10 }]);
   });
 });
 
 describe("getMarketMakers", () => {
   it("returns market makers", async () => {
-    const result = await getMarketMakers();
+    const result = await getMarketMakers("RWF");
     expect(result).toEqual([]);
   });
 });

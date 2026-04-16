@@ -1,8 +1,8 @@
 import { db } from "../db/client";
-import { ads, advertisers } from "../db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { advertisers } from "../db/schema";
+import { eq, sql } from "drizzle-orm";
 
-export async function getTopTraders(limit: number = 20) {
+export async function getTopTraders(fiat: string, limit: number = 20) {
   const result = await db.execute(sql`
     SELECT
       a.id,
@@ -20,7 +20,8 @@ export async function getTopTraders(limit: number = 20) {
       AVG(CAST(ad.price AS numeric)) FILTER (WHERE ad.trade_type = 'SELL') AS avg_sell_price
     FROM advertisers a
     INNER JOIN ads ad ON ad.advertiser_id = a.id
-    WHERE ad.scraped_at > NOW() - INTERVAL '7 days'
+    WHERE ad.fiat = ${fiat}
+      AND ad.scraped_at > NOW() - INTERVAL '7 days'
     GROUP BY a.id
     ORDER BY total_ads DESC
     LIMIT ${limit}
@@ -29,7 +30,7 @@ export async function getTopTraders(limit: number = 20) {
   return result.rows;
 }
 
-export async function getTraderProfile(userNo: string) {
+export async function getTraderProfile(userNo: string, fiat: string) {
   const [trader] = await db
     .select()
     .from(advertisers)
@@ -48,6 +49,7 @@ export async function getTraderProfile(userNo: string) {
       CAST(ad.max_amount AS numeric) AS max_amount
     FROM ads ad
     WHERE ad.advertiser_id = ${trader.id}
+      AND ad.fiat = ${fiat}
       AND ad.scraped_at > NOW() - INTERVAL '30 days'
     ORDER BY ad.scraped_at DESC
     LIMIT 500
@@ -56,7 +58,7 @@ export async function getTraderProfile(userNo: string) {
   return { trader, adHistory: adHistory.rows };
 }
 
-export async function getTraderHourlyPatterns(userNo: string) {
+export async function getTraderHourlyPatterns(userNo: string, fiat: string) {
   const [trader] = await db
     .select()
     .from(advertisers)
@@ -73,6 +75,7 @@ export async function getTraderHourlyPatterns(userNo: string) {
       AVG(CAST(ad.price AS numeric)) AS avg_price
     FROM ads ad
     WHERE ad.advertiser_id = ${trader.id}
+      AND ad.fiat = ${fiat}
       AND ad.scraped_at > NOW() - INTERVAL '30 days'
     GROUP BY hour_of_day, day_of_week
     ORDER BY hour_of_day
@@ -81,11 +84,12 @@ export async function getTraderHourlyPatterns(userNo: string) {
   return result.rows;
 }
 
-export async function getMarketMakers() {
+export async function getMarketMakers(fiat: string) {
   const result = await db.execute(sql`
     WITH total_sessions AS (
       SELECT COUNT(DISTINCT session_id) AS total FROM ads
-      WHERE scraped_at > NOW() - INTERVAL '7 days'
+      WHERE fiat = ${fiat}
+        AND scraped_at > NOW() - INTERVAL '7 days'
     ),
     trader_presence AS (
       SELECT
@@ -94,7 +98,8 @@ export async function getMarketMakers() {
         COUNT(DISTINCT ad.session_id) AS sessions_present
       FROM advertisers a
       INNER JOIN ads ad ON ad.advertiser_id = a.id
-      WHERE ad.scraped_at > NOW() - INTERVAL '7 days'
+      WHERE ad.fiat = ${fiat}
+        AND ad.scraped_at > NOW() - INTERVAL '7 days'
       GROUP BY a.id
     )
     SELECT
