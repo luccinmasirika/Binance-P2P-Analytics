@@ -21,10 +21,10 @@ export default function DashboardPage() {
   const [granularity, setGranularity] = useState("1h");
   const [activeTab, setActiveTab] = useState("price");
   const [stats, setStats] = useState<any>(null);
-  const [priceData, setPriceData] = useState([]);
-  const [spreadData, setSpreadData] = useState([]);
-  const [heatmapData, setHeatmapData] = useState([]);
-  const [depthData, setDepthData] = useState([]);
+  const [priceData, setPriceData] = useState<any[]>([]);
+  const [spreadData, setSpreadData] = useState<any[]>([]);
+  const [heatmapData, setHeatmapData] = useState<any[]>([]);
+  const [depthData, setDepthData] = useState<any[]>([]);
   const [recentAds, setRecentAds] = useState<AdRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
@@ -47,12 +47,28 @@ export default function DashboardPage() {
           fetch(`/api/ads?mode=latest&limit=50&${q}`),
         ]);
 
-      setStats(await statsRes.json());
-      setPriceData(await priceRes.json());
-      setSpreadData(await spreadRes.json());
-      setHeatmapData(await heatmapRes.json());
-      setDepthData(await depthRes.json());
-      setRecentAds(await adsRes.json());
+      const readArray = async (res: Response, label: string) => {
+        if (!res.ok) {
+          console.error(`${label} fetch failed`, res.status, await res.text());
+          return [];
+        }
+        const data = await res.json();
+        return Array.isArray(data) ? data : [];
+      };
+      const readObject = async (res: Response, label: string) => {
+        if (!res.ok) {
+          console.error(`${label} fetch failed`, res.status, await res.text());
+          return null;
+        }
+        return await res.json();
+      };
+
+      setStats(await readObject(statsRes, "stats"));
+      setPriceData(await readArray(priceRes, "price"));
+      setSpreadData(await readArray(spreadRes, "spread"));
+      setHeatmapData(await readArray(heatmapRes, "heatmap"));
+      setDepthData(await readArray(depthRes, "depth"));
+      setRecentAds(await readArray(adsRes, "ads"));
     } catch (err) {
       console.error("Failed to fetch dashboard data:", err);
     }
@@ -165,10 +181,7 @@ export default function DashboardPage() {
                 
                 <div className="flex flex-col">
                   <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 pl-1">État de Sync</span>
-                  <div className="flex items-center gap-2 px-2 py-1 bg-background/40 rounded border border-border/50" aria-live="polite">
-                    <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" aria-hidden="true" />
-                    <span className="text-[10px] font-bold text-white uppercase tracking-tighter">Connecté</span>
-                  </div>
+                  <SyncStatus scrapedAt={recentAds[0]?.scrapedAt} />
                 </div>
               </div>
 
@@ -251,8 +264,42 @@ function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center h-[440px] text-muted-foreground border border-dashed border-border/40 rounded bg-muted/5" role="status">
       <RefreshCw className="w-10 h-10 mb-4 opacity-5 animate-spin-slow" aria-hidden="true" />
-      <p className="text-xs font-bold uppercase tracking-widest">Connectez le scanner</p>
-      <p className="text-[10px] mt-1 text-center max-w-[200px]">Lancez un scan du marché pour alimenter le tableau de bord.</p>
+      <p className="text-xs font-bold uppercase tracking-widest">Pas de données sur la période</p>
+      <p className="text-[10px] mt-1 text-center max-w-[260px]">Aucune donnée de scraping dans la fenêtre sélectionnée. Vérifiez l&apos;état de sync ou lancez un scan manuel.</p>
+    </div>
+  );
+}
+
+function ageMinutes(scrapedAt: string | Date | null | undefined): number | null {
+  if (!scrapedAt) return null;
+  const ts = typeof scrapedAt === "string" ? new Date(scrapedAt).getTime() : scrapedAt.getTime();
+  if (Number.isNaN(ts)) return null;
+  return (Date.now() - ts) / 60_000;
+}
+
+function SyncStatus({ scrapedAt }: { scrapedAt: string | Date | null | undefined }) {
+  const age = ageMinutes(scrapedAt);
+  let dotClass = "bg-muted-foreground";
+  let label = "Aucune donnée";
+  let pulse = false;
+  if (age === null) {
+    // keep defaults
+  } else if (age < 15) {
+    dotClass = "bg-success";
+    pulse = true;
+    label = "Connecté";
+  } else if (age < 30) {
+    dotClass = "bg-amber-400";
+    label = `En retard · ${Math.round(age)}min`;
+  } else {
+    dotClass = "bg-destructive";
+    const hours = Math.floor(age / 60);
+    label = hours >= 1 ? `Périmé · ${hours}h` : `Périmé · ${Math.round(age)}min`;
+  }
+  return (
+    <div className="flex items-center gap-2 px-2 py-1 bg-background/40 rounded border border-border/50" aria-live="polite">
+      <div className={`w-1.5 h-1.5 rounded-full ${dotClass} ${pulse ? "animate-pulse" : ""}`} aria-hidden="true" />
+      <span className="text-[10px] font-bold text-white uppercase tracking-tighter">{label}</span>
     </div>
   );
 }

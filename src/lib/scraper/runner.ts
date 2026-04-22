@@ -47,6 +47,14 @@ export async function runFullScrape() {
     }
   }
 
+  // Mark any orphaned 'running' sessions from previous crashed runs as failed.
+  // Otherwise they linger forever and skew "is the scraper alive?" heuristics.
+  await db.execute(sql`
+    UPDATE scrape_sessions
+    SET status = 'failed', finished_at = NOW()
+    WHERE status = 'running' AND started_at < NOW() - INTERVAL '15 minutes'
+  `);
+
   // 1. Create session
   const [session] = await db
     .insert(scrapeSessions)
