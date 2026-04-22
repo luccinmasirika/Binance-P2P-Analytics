@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
-  LayoutDashboard, 
-  Users, 
-  Activity, 
-  Bell, 
+import {
+  LayoutDashboard,
+  Users,
+  Activity,
+  Bell,
   Globe,
   Settings,
-  Bot
+  Bot,
+  TrendingUp
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/traders", label: "Traders", icon: Users },
   { href: "/simulator", label: "Simulateur", icon: Activity },
+  { href: "/opportunities", label: "Opportunités", icon: TrendingUp },
   { href: "/alerts", label: "Alertes", icon: Bell },
   { href: "/countries", label: "Pays", icon: Globe },
 ];
