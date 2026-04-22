@@ -95,7 +95,7 @@ export default function CountriesPage() {
           setScrapeStatus((current) =>
             current && current.fiat === fiat ? null : current
           );
-        }, 5000);
+        }, 10000);
       });
   };
 
@@ -165,9 +165,9 @@ export default function CountriesPage() {
           </span>
           <span>
             {scrapeStatus.state === "pending"
-              ? "Collecte des premières données en cours…"
+              ? "Collecte lancée en arrière-plan…"
               : scrapeStatus.state === "done"
-              ? "Premier scrape terminé. Les données sont disponibles."
+              ? "Scrape lancé. Les données apparaîtront dans 2–4 min."
               : "Le scrape a échoué. Le prochain cron réessaiera dans ≤10 min."}
           </span>
         </div>

@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { runFullScrape } from "@/lib/scraper/runner";
 import { SESSION_COOKIE, SESSION_VALUE } from "@/lib/auth";
@@ -29,14 +29,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  try {
-    await runFullScrape();
-    return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error("Manual scrape failed:", err);
-    return NextResponse.json(
-      { success: false, error: err.message },
-      { status: 500 }
-    );
-  }
+  after(async () => {
+    try {
+      await runFullScrape();
+    } catch (err) {
+      console.error("Background scrape failed:", err);
+    }
+  });
+
+  return NextResponse.json({ accepted: true }, { status: 202 });
 }
